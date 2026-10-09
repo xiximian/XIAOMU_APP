@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             x:Class="Xiaomuocr.Views.Views.LoginView">
+
+    <Grid>
+        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Background="#FDFBF7" CornerRadius="12" Padding="40,32"
+                     MaxWidth="400">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="小木史料阅读器" FontSize="28" FontWeight="Bold"
+                               Foreground="#2D3A2C" HorizontalAlignment="Center" />
+                    <TextBlock Text="登录账户" FontSize="16" Foreground="#5C5344"
+                               HorizontalAlignment="Center" Margin="0,0,0,10" />
+
+                    <TextBlock Text="手机号" FontSize="13" Foreground="#3D4A3E" />
+                    <TextBox Text="{Binding LoginId}" Watermark="请输入11位手机号" MaxLength="11" />
+
+                    <TextBlock Text="密码" FontSize="13" Foreground="#3D4A3E" />
+                    <TextBox Text="{Binding Password}" PasswordChar="*"
+                             Watermark="请输入密码" />
+
+                    <CheckBox IsChecked="{Binding RememberAccount}" Foreground="#5C5344"
+                              FontSize="12" Margin="0,-4,0,0">
+                        <TextBlock Text="记住账号" FontSize="12" Foreground="#5C5344" />
+                    </CheckBox>
+
+                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C"
+                               FontSize="12" IsVisible="{Binding HasError}"
+                               TextWrapping="Wrap" />
+
+                    <Button Content="登 录" Command="{Binding LoginCommand}"
+                            Background="#4A7C59" Foreground="White"
+                            FontSize="14" FontWeight="Bold" Padding="0,10"
+                            CornerRadius="8" HorizontalAlignment="Stretch" />
+
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Height="1" Background="#D4CDBF"
+                                VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock Grid.Column="1" Text="或" FontSize="12"
+                                   Foreground="#8B8370" VerticalAlignment="Center" />
+                        <Border Grid.Column="2" Height="1" Background="#D4CDBF"
+                                VerticalAlignment="Center" Margin="10,0,0,0" />
+                    </Grid>
+
+                    <Button Content="微信扫码登录" Command="{Binding WxLoginCommand}"
+                            Background="#07C160" Foreground="White"
+                            FontSize="13" FontWeight="Bold" Padding="0,9"
+                            CornerRadius="8" HorizontalAlignment="Stretch"
+                            ToolTip.Tip="首次扫码将自动创建账户" />
+
+                    <Button Content="📖 离线阅读" Command="{Binding OfflineReadingCommand}"
+                            Background="#EAE5D9" Foreground="#5C5344"
+                            FontSize="13" Padding="0,8"
+                            CornerRadius="8" HorizontalAlignment="Stretch"
+                            IsVisible="{Binding IsOfflineEntryVisible}"
+                            ToolTip.Tip="无需网络，直接进入文献库阅读已识别文献" />
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+                        <Button Content="忘记密码？"
+                                Command="{Binding GoToResetPasswordCommand}"
+                                Background="Transparent" Foreground="#9B722E"
+                                FontSize="12" />
+                        <Button Content="还没有账号？立即注册"
+                                Command="{Binding GoToRegisterCommand}"
+                                Background="Transparent" Foreground="#4A7C59"
+                                FontSize="12" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 左下角：仅显示已连接，不暴露服务器地址 -->
+        <TextBlock Text="{Binding ServerConnectionLabel}"
+                   IsVisible="{Binding HasServerConnection}"
+                   HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                   Margin="16,0,0,12" FontSize="12" Foreground="#4A7C59" />
+    </Grid>
+</UserControl>

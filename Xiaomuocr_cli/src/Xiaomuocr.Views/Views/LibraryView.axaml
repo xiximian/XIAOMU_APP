@@ -1,0 +1,167 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.Views.Views.LibraryView">
+    <Grid ColumnDefinitions="220,*" Margin="12,10">
+        <!-- ===== 左侧：文件夹树 ===== -->
+        <Border Grid.Column="0" Background="#FDFBF7" CornerRadius="8" Padding="12,10" Margin="0,0,8,0">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <TextBlock Text="📁 文件夹" FontSize="15" FontWeight="Bold"
+                           Foreground="#2D3A2C" Margin="0,0,0,10" />
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" Margin="0,0,0,8">
+                    <TextBox Text="{Binding NewFolderName}" Watermark="在选中目录下新建"
+                             Width="130" FontSize="12" />
+                    <Button Content="+" Command="{Binding AddFolderCommand}"
+                            Background="#4A7C59" Foreground="White" Width="30" Height="30"
+                            CornerRadius="4" FontWeight="Bold" FontSize="14"
+                            ToolTip.Tip="在当前选中文件夹下创建子文件夹" />
+                </StackPanel>
+
+                <TreeView Grid.Row="2" ItemsSource="{Binding FolderTree}"
+                          SelectedItem="{Binding SelectedFolderNode}">
+                    <TreeView.Styles>
+                        <Style Selector="TreeViewItem">
+                            <Setter Property="IsExpanded" Value="True" />
+                            <Setter Property="Padding" Value="2,2" />
+                        </Style>
+                    </TreeView.Styles>
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate ItemsSource="{Binding Children}">
+                            <TextBlock Text="{Binding Name}" FontSize="13" Padding="2,2" />
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+                    <Button Content="✎ 重命名" Click="OnRenameFolderClick"
+                            Background="#D4E5D9" Foreground="#2D5A3D"
+                            Padding="8,4" CornerRadius="4" FontSize="12" />
+                    <Button Content="✕ 删除文件夹" Command="{Binding DeleteFolderCommand}"
+                            Background="#F5E0DC" Foreground="#B8443C"
+                            Padding="8,4" CornerRadius="4" FontSize="12" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== 右侧：文献列表 ===== -->
+        <Border Grid.Column="1" Background="#FDFBF7" CornerRadius="8" Padding="16,10">
+            <Grid RowDefinitions="Auto,Auto,Auto,*">
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                    <TextBlock Text="📚 文献列表" FontSize="16" FontWeight="Bold"
+                               Foreground="#2D3A2C" VerticalAlignment="Center" />
+                    <TextBlock Foreground="#5C5344" FontSize="13" VerticalAlignment="Center">
+                        (<Run Text="{Binding Items.Count}" /> 篇)
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                    <TextBox Text="{Binding SearchKeyword}" Watermark="搜索文献名..."
+                             Width="180" FontSize="12" />
+                    <Button Content="📥 导入PDF" Click="OnImportPdfClick"
+                            Background="#4A7C59" Foreground="White" Padding="12,6"
+                            CornerRadius="4" FontSize="13" />
+                    <Button Content="🖼 导入图片" Click="OnImportImagesClick"
+                            Background="#4A7C59" Foreground="White" Padding="12,6"
+                            CornerRadius="4" FontSize="13" />
+                    <Button Name="ScreenshotImportBtn" Content="✂ 截图导入" Click="OnScreenshotImportClick"
+                            Background="#3D6B8A" Foreground="White" Padding="12,6"
+                            CornerRadius="4" FontSize="13" />
+                    <Button Content="🔗 合并所选" Click="OnMergeSelectedClick"
+                            Background="#9B722E" Foreground="White" Padding="12,6"
+                            CornerRadius="4" FontSize="13"
+                            ToolTip.Tip="勾选至少两篇图片/截图文献后合并为一篇多页文献" />
+                    <Button Content="🔄" Command="{Binding RefreshCommand}"
+                            Background="#D4E5D9" Foreground="#3D4A3E" Width="32" Height="32"
+                            CornerRadius="4" />
+                </StackPanel>
+
+                <!-- 消息区域 -->
+                <Border Grid.Row="2" Background="#F5E0DC" CornerRadius="4" Padding="6,4"
+                        Margin="0,0,0,6" IsVisible="{Binding HasError}">
+                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C" FontSize="12" />
+                </Border>
+                <Border Grid.Row="2" Background="#F2E6C8" CornerRadius="4" Padding="6,4"
+                        Margin="0,0,0,6" IsVisible="{Binding HasStatus}">
+                    <TextBlock Text="{Binding StatusMessage}" Foreground="#5C5344" FontSize="12" />
+                </Border>
+
+                <!-- 文献列表 -->
+                <ScrollViewer Grid.Row="3">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#EAE5D9" CornerRadius="6"
+                                        Padding="12,10" Margin="0,0,0,6">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                                        <CheckBox Grid.Row="0" Grid.RowSpan="3" Grid.Column="0"
+                                                  IsChecked="{Binding IsSelectedForMerge}"
+                                                  IsVisible="{Binding CanMerge}"
+                                                  IsEnabled="{Binding CanMerge}"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,10,0"
+                                                  ToolTip.Tip="勾选后可与其它图片/截图文献合并" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                                   Text="{Binding Name}" FontSize="14"
+                                                   FontWeight="Bold" Foreground="#2D3A2C" />
+                                        <StackPanel Grid.Row="1" Grid.Column="1"
+                                                    Orientation="Horizontal" Spacing="8"
+                                                    Margin="0,4,0,0">
+                                            <TextBlock FontSize="12" Foreground="#2D5A3D">
+                                                <Run Text="已识别 " />
+                                                <Run Text="{Binding OcrDonePages}" FontWeight="Bold" />
+                                                <Run Text=" / " />
+                                                <Run Text="{Binding TotalPages}" FontWeight="Bold" />
+                                                <Run Text=" 页" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Source}" FontSize="11"
+                                                       Foreground="#5C5344" />
+                                            <TextBlock Text="{Binding AddedTime}" FontSize="11"
+                                                       Foreground="#8B8370" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="2" Grid.Column="1"
+                                                   Text="{Binding Notes}" FontSize="11"
+                                                   Foreground="#8B8370" TextWrapping="Wrap"
+                                                   MaxHeight="28" />
+                                        <StackPanel Grid.Row="0" Grid.RowSpan="3" Grid.Column="2"
+                                                    Orientation="Horizontal" Spacing="8"
+                                                    VerticalAlignment="Center" Margin="12,0,0,0">
+                                            <Button Content="打开" Background="#4A7C59" Foreground="White"
+                                                    FontSize="13" FontWeight="SemiBold"
+                                                    MinWidth="72" MinHeight="36"
+                                                    Padding="12,8" CornerRadius="6"
+                                                    Tag="{Binding}" Click="OnOpenItemClick" />
+                                            <Button Content="属性" Background="#E8F0E9" Foreground="#2D5A3D"
+                                                    FontSize="13" FontWeight="SemiBold"
+                                                    MinWidth="64" MinHeight="36"
+                                                    Padding="10,8" CornerRadius="6"
+                                                    Tag="{Binding}" Click="OnEditItemClick"
+                                                    ToolTip.Tip="修改名称、备注、来源" />
+                                            <Button Content="移动到" Background="#D4E5D9" Foreground="#2D5A3D"
+                                                    FontSize="12" FontWeight="SemiBold"
+                                                    MinWidth="64" MinHeight="36"
+                                                    Padding="10,8" CornerRadius="6"
+                                                    Tag="{Binding}" Click="OnMoveItemClick"
+                                                    ToolTip.Tip="将文献转移到其他文件夹" />
+                                            <Button Content="全文识别" Background="#F2E6C8" Foreground="#9B722E"
+                                                    BorderBrush="#D5CFBF" BorderThickness="1"
+                                                    FontSize="12" FontWeight="SemiBold"
+                                                    MinWidth="80" MinHeight="36"
+                                                    Padding="10,8" CornerRadius="6"
+                                                    Tag="{Binding}" Click="OnStartOcrClick"
+                                                    ToolTip.Tip="对未识别页面执行全文识别（需确认）" />
+                                            <Button Content="删除" Background="#F5E0DC" Foreground="#B8443C"
+                                                    FontSize="12" FontWeight="SemiBold"
+                                                    MinWidth="56" MinHeight="36"
+                                                    Padding="10,8" CornerRadius="6"
+                                                    Tag="{Binding}" Click="OnDeleteItemClick" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

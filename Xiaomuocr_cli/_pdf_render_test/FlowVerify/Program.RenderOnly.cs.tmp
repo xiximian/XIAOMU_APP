@@ -1,0 +1,12 @@
+﻿using Xiaomuocr.Core.Services;
+var pdf = Directory.GetFiles(@""d:\Python\XIAOMU_OCR_App\Xiaomuocr_cli\pdf_testdata"", ""*.pdf"").First();
+Console.WriteLine(pdf);
+using var render = new PdfRenderService();
+var info = await render.OpenPdfAsync(pdf);
+Console.WriteLine($""open ok {info.TotalPages}"");
+for (int i=0;i<3;i++) {
+  Console.WriteLine($""render pass {i}"");
+  var b = await render.RenderPageForDisplayAsync(0, 1.0f, 0);
+  Console.WriteLine($""  bytes={b.Length}"");
+}
+Console.WriteLine(""DONE"");

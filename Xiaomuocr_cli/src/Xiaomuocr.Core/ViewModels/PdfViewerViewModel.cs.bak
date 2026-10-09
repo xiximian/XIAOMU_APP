@@ -1,0 +1,1355 @@
+using ReactiveUI;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Reactive;
+using System.Reactive.Linq;
+using System.Text.Json;
+using Xiaomuocr.Core.Models;
+using Xiaomuocr.Core.Services;
+
+namespace Xiaomuocr.Core.ViewModels;
+
+public class PdfViewerViewModel : ViewModelBase
+{
+    /// <summary>允许极小缩放，以适配过万点宽的拓片/扫描件横向铺满。</summary>
+    private const float MinZoom = 0.01f;
+    private const float MaxZoom = 5.0f;
+    /// <summary>单边渲染上限（像素），避免超大页高倍放大 OOM。</summary>
+    private const int MaxRenderEdgePx = 8192;
+
+    private readonly IPdfRenderService _pdfRender;
+    private readonly IOcrResultService _ocrResult;
+    private readonly IPdfOcrPipelineService? _pdfOcr;
+    private readonly IAppLogService? _appLog;
+    private readonly IHighlightService? _highlightService;
+    private readonly ISearchService? _searchService;
+    private readonly IFullTextExportService? _exportService;
+    private readonly LibraryItem? _libraryItem;
+    private double _cachedPageW = 595, _cachedPageH = 842; // 缓存页面尺寸
+
+    // ---- PDF 文档信息 ----
+    private string _pdfPath = "";
+    public string PdfPath { get => _pdfPath; set => this.RaiseAndSetIfChanged(ref _pdfPath, value); }
+
+    private string _documentName = "";
+    public string DocumentName { get => _documentName; set => this.RaiseAndSetIfChanged(ref _documentName, value); }
+
+    private string _jsonDir = "";
+    public string JsonDir { get => _jsonDir; set => this.RaiseAndSetIfChanged(ref _jsonDir, value); }
+
+    private int _currentPage;
+    /// <summary>0-based 内部页码</summary>
+    public int CurrentPage
+    {
+        get => _currentPage;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _currentPage, value);
+            this.RaisePropertyChanged(nameof(CurrentPageDisplay));
+        }
+    }
+
+    /// <summary>1-based 展示页码（工具栏 1/2）</summary>
+    public int CurrentPageDisplay => CurrentPage + 1;
+
+    private bool _pageLoaded; // 防止渲染时 PDF 未就绪
+
+    private int _totalPages;
+    public int TotalPages
+    {
+        get => _totalPages;
+        set => this.RaiseAndSetIfChanged(ref _totalPages, value);
+    }
+
+    // ---- 显示状态 ----
+    private float _zoom = 1.0f;
+    public float Zoom
+    {
+        get => _zoom;
+        set
+        {
+            float clamped = Math.Clamp(value, MinZoom, EffectiveMaxZoom());
+            bool changed = Math.Abs(_zoom - clamped) > 0.0005f;
+            _zoom = clamped;
+            this.RaisePropertyChanged();
+            if (changed && _pageLoaded) _ = RenderDisplayAsync();
+        }
+    }
+
+    private int _rotation;
+    public int Rotation
+    {
+        get => _rotation;
+        set
+        {
+            bool changed = _rotation != value;
+            _rotation = value;
+            this.RaisePropertyChanged();
+            if (changed && _pageLoaded) _ = RenderDisplayAsync();
+        }
+    }
+
+    private byte[]? _displayImage;
+    public byte[]? DisplayImage
+    {
+        get => _displayImage;
+        set => this.RaiseAndSetIfChanged(ref _displayImage, value);
+    }
+
+    private int _displayWidth;
+    public int DisplayWidth
+    {
+        get => _displayWidth;
+        set => this.RaiseAndSetIfChanged(ref _displayWidth, value);
+    }
+
+    private int _displayHeight;
+    public int DisplayHeight
+    {
+        get => _displayHeight;
+        set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
+    }
+
+    // ---- OCR 数据 ----
+    private PreprocessInfo? _preprocess;
+    public PreprocessInfo? Preprocess
+    {
+        get => _preprocess;
+        set => this.RaiseAndSetIfChanged(ref _preprocess, value);
+    }
+
+    /// <summary>OCR 文本块列表 (用于 bbox 绘制)</summary>
+    public ObservableCollection<OcrTextBlockViewModel> Blocks { get; } = new();
+
+    /// <summary>左侧页码导航列表</summary>
+    public ObservableCollection<PdfPageNavItem> PageNavItems { get; } = new();
+
+    /// <summary>当前文档的高亮数据（pageIndex → highlights）</summary>
+    private Dictionary<int, List<HighlightEntry>> _docHighlights;
+
+    private int _selectedBlockIndex = -1;
+    public int SelectedBlockIndex
+    {
+        get => _selectedBlockIndex;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedBlockIndex, value);
+            this.RaisePropertyChanged(nameof(SelectedBlockText));
+        }
+    }
+
+    /// <summary>当前选中的文本块内容</summary>
+    public string SelectedBlockText =>
+        SelectedBlockIndex >= 0 && SelectedBlockIndex < Blocks.Count
+            ? Blocks[SelectedBlockIndex].Text : "";
+
+    // ---- 文本编辑 ----
+    private string _fullText = "";
+    public string FullText
+    {
+        get => _fullText;
+        set => this.RaiseAndSetIfChanged(ref _fullText, value);
+    }
+
+    private bool _showConverted;
+    public bool ShowConverted
+    {
+        get => _showConverted;
+        set
+        {
+            if (_showConverted == value) return;
+            // 切换前按「当前模式」提交编辑框（未改动的简体预览不会覆盖原文）
+            foreach (var b in Blocks)
+                b.CommitEditorToText(_showConverted, ConvertToSimplified);
+            _showConverted = value;
+            this.RaisePropertyChanged();
+            _ = UpdateTextDisplayAsync();
+        }
+    }
+
+    private string _convertBtnLabel = "繁→简";
+    public string ConvertBtnLabel
+    {
+        get => _convertBtnLabel;
+        set => this.RaiseAndSetIfChanged(ref _convertBtnLabel, value);
+    }
+
+    // ---- OCR ----
+    private bool _isOcrRunning;
+    public bool IsOcrRunning
+    {
+        get => _isOcrRunning;
+        set => this.RaiseAndSetIfChanged(ref _isOcrRunning, value);
+    }
+
+    private string _rangeFrom = "1";
+    public string RangeFrom
+    {
+        get => _rangeFrom;
+        set => this.RaiseAndSetIfChanged(ref _rangeFrom, value);
+    }
+
+    private string _rangeTo = "1";
+    public string RangeTo
+    {
+        get => _rangeTo;
+        set => this.RaiseAndSetIfChanged(ref _rangeTo, value);
+    }
+
+    // ---- 命令 ----
+    public ReactiveCommand<Unit, Unit> PrevPageCommand { get; }
+    public ReactiveCommand<Unit, Unit> NextPageCommand { get; }
+    public ReactiveCommand<Unit, Unit> ZoomInCommand { get; }
+    public ReactiveCommand<Unit, Unit> ZoomOutCommand { get; }
+    public ReactiveCommand<Unit, Unit> RotateLeftCommand { get; }
+    public ReactiveCommand<Unit, Unit> RotateRightCommand { get; }
+    public ReactiveCommand<Unit, Unit> SaveTextCommand { get; }
+    public ReactiveCommand<Unit, Unit> ToggleConvertCommand { get; }
+    public ReactiveCommand<Unit, Unit> OcrCurrentPageCommand { get; }
+    public ReactiveCommand<Unit, Unit> OcrAllPagesCommand { get; }
+    public ReactiveCommand<Unit, Unit> OcrRangeCommand { get; }
+    public ReactiveCommand<int, Unit> GoToPageCommand { get; }
+
+    // ---- 高亮 / 搜索 / 导出 ----
+    public ReactiveCommand<Unit, Unit> AddHighlightCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearHighlightsCommand { get; }
+    public ReactiveCommand<Unit, Unit> SearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> HighlightListCommand { get; }
+    public ReactiveCommand<Unit, Unit> ExportCommand { get; }
+
+    /// <summary>文本块被点击 (从文本面板)</summary>
+    public event Action<int>? TextBlockClicked;
+
+    /// <summary>请求视图测量 PDF 区域宽度，用于横向铺满</summary>
+    public event Action? FitToWidthRequested;
+
+    /// <summary>OCR 进度（供主窗口状态栏）</summary>
+    public event Action<string>? OcrStatusChanged;
+
+    /// <summary>视图注入：打开搜索对话框，返回跳转目标（null=关闭/取消）</summary>
+    public Func<Task<(int pageIndex, int blockIndex)?>>? OpenSearchDialogAsync { get; set; }
+
+    /// <summary>视图注入：打开高亮列表对话框，返回跳转目标（null=关闭/取消）</summary>
+    public Func<Task<(int pageIndex, int blockIndex)?>>? OpenHighlightListDialogAsync { get; set; }
+
+    /// <summary>高亮分段变化后通知 View 重建 Inlines。</summary>
+    public event Action? HighlightsChanged;
+
+    /// <summary>请求视图触发文件保存对话框（导出全文）</summary>
+    public event Func<string, string, Task<string?>>? SaveFileDialogRequested;
+
+    private TaskCompletionSource<double>? _fitWidthTcs;
+
+    public PdfViewerViewModel(
+        IPdfRenderService pdfRender,
+        IOcrResultService ocrResult,
+        IAppLogService? appLog = null)
+        : this(pdfRender, ocrResult, null, null, null, null, null, appLog)
+    {
+    }
+
+    public PdfViewerViewModel(
+        IPdfRenderService pdfRender,
+        IOcrResultService ocrResult,
+        IPdfOcrPipelineService? pdfOcr,
+        LibraryItem? libraryItem,
+        IAppLogService? appLog = null)
+        : this(pdfRender, ocrResult, pdfOcr, libraryItem, null, null, null, appLog)
+    {
+    }
+
+    public PdfViewerViewModel(
+        IPdfRenderService pdfRender,
+        IOcrResultService ocrResult,
+        IPdfOcrPipelineService? pdfOcr,
+        LibraryItem? libraryItem,
+        IHighlightService? highlightService,
+        ISearchService? searchService,
+        IFullTextExportService? exportService,
+        IAppLogService? appLog = null)
+    {
+        _pdfRender = pdfRender;
+        _ocrResult = ocrResult;
+        _pdfOcr = pdfOcr;
+        _libraryItem = libraryItem;
+        _highlightService = highlightService;
+        _searchService = searchService;
+        _exportService = exportService;
+        _appLog = appLog;
+
+        _docHighlights = new Dictionary<int, List<HighlightEntry>>();
+
+        var canPrev = this.WhenAnyValue(x => x.CurrentPage, p => p > 0);
+        var canNext = this.WhenAnyValue(x => x.CurrentPage, x => x.TotalPages, (p, t) => p < t - 1);
+        var canOcr = this.WhenAnyValue(
+            x => x.IsOcrRunning, x => x.IsBusy, x => x.TotalPages, x => x.PdfPath,
+            (ocr, busy, pages, path) => !ocr && !busy && pages > 0 && !string.IsNullOrEmpty(path) && _pdfOcr != null && _libraryItem != null);
+
+        PrevPageCommand = ReactiveCommand.CreateFromTask(PrevPageAsync, canPrev);
+        NextPageCommand = ReactiveCommand.CreateFromTask(NextPageAsync, canNext);
+        // 乘除步进：大页 fit 后可能只有 5%–15%，固定 ±0.25 会导致缩小无效、放大过猛
+        ZoomInCommand = ReactiveCommand.Create(() => { Zoom *= 1.25f; });
+        ZoomOutCommand = ReactiveCommand.Create(() => { Zoom /= 1.25f; });
+        RotateLeftCommand = ReactiveCommand.Create(() => { Rotation = (Rotation - 90) % 360; });
+        RotateRightCommand = ReactiveCommand.Create(() => { Rotation = (Rotation + 90) % 360; });
+        SaveTextCommand = ReactiveCommand.CreateFromTask(SaveTextAsync);
+        ToggleConvertCommand = ReactiveCommand.Create(() =>
+        {
+            ShowConverted = !ShowConverted;
+            ConvertBtnLabel = ShowConverted ? "原文" : "繁→简";
+        });
+        OcrCurrentPageCommand = ReactiveCommand.CreateFromTask(OcrCurrentPageAsync, canOcr);
+        OcrAllPagesCommand = ReactiveCommand.CreateFromTask(OcrAllPagesAsync, canOcr);
+        OcrRangeCommand = ReactiveCommand.CreateFromTask(OcrRangeAsync, canOcr);
+        GoToPageCommand = ReactiveCommand.CreateFromTask<int>(GoToPageAsync);
+
+        // 高亮 / 搜索 / 导出命令
+        AddHighlightCommand = ReactiveCommand.CreateFromTask(AddHighlightAsync);
+        ClearHighlightsCommand = ReactiveCommand.CreateFromTask(ClearHighlightsAsync);
+        SearchCommand = ReactiveCommand.CreateFromTask(OpenSearchAsync);
+        HighlightListCommand = ReactiveCommand.CreateFromTask(OpenHighlightListAsync);
+        ExportCommand = ReactiveCommand.CreateFromTask(ExportFullTextAsync);
+    }
+
+    /// <summary>打开 PDF 并加载第一页</summary>
+    public async Task OpenDocumentAsync(string pdfPath, string? jsonDir = null)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PdfVM] OpenDocumentAsync: {pdfPath}");
+        _pageLoaded = false;
+        IsBusy = true;
+        ClearError();
+        StatusMessage = "正在加载 PDF...";
+        _appLog?.Info($"打开文档: {System.IO.Path.GetFileName(pdfPath)}");
+        try
+        {
+            var info = await _pdfRender.OpenPdfAsync(pdfPath);
+            System.Diagnostics.Debug.WriteLine($"[PdfVM] PDF opened: {info.TotalPages} pages, {info.PageWidth}x{info.PageHeight}");
+            _appLog?.Info($"PDF 已加载: {info.TotalPages} 页, 尺寸 {info.PageWidth:F0}x{info.PageHeight:F0}");
+
+            // 缓存页面尺寸（避免后续重复打开 PDF）
+            _cachedPageW = info.PageWidth;
+            _cachedPageH = info.PageHeight;
+
+            PdfPath = pdfPath;
+            DocumentName = System.IO.Path.GetFileNameWithoutExtension(pdfPath);
+            TotalPages = info.TotalPages;
+            RangeFrom = "1";
+            RangeTo = Math.Max(1, info.TotalPages).ToString();
+            JsonDir = jsonDir ?? System.IO.Path.Combine(
+                System.IO.Path.GetDirectoryName(pdfPath) ?? "",
+                System.IO.Path.GetFileNameWithoutExtension(pdfPath));
+            RebuildPageNavItems();
+
+            if (_libraryItem != null)
+            {
+                _libraryItem.TotalPages = info.TotalPages;
+                if (string.IsNullOrEmpty(_libraryItem.OutputDir))
+                    _libraryItem.OutputDir = JsonDir;
+                if (string.IsNullOrEmpty(_libraryItem.PdfPath))
+                    _libraryItem.PdfPath = pdfPath;
+            }
+
+            // 先设置不触发渲染的属性；Zoom 由横向铺满计算，翻页时保持不变
+            _rotation = 0; this.RaisePropertyChanged(nameof(Rotation));
+            _currentPage = 0;
+            this.RaisePropertyChanged(nameof(CurrentPage));
+            this.RaisePropertyChanged(nameof(CurrentPageDisplay));
+            UpdatePageNavCurrent();
+            _pageLoaded = true;
+
+            StatusMessage = $"已加载 {info.TotalPages} 页, 正在适配宽度...";
+            _appLog?.Info("计算横向铺满缩放...");
+            var viewportW = await RequestViewportWidthAsync();
+            ApplyFitWidthZoom(viewportW);
+            _appLog?.Info($"横向铺满 zoom={Zoom:F3} (viewport={viewportW:F0}, pageW={_cachedPageW:F0})");
+
+            StatusMessage = $"已加载 {info.TotalPages} 页, 正在渲染...";
+            _appLog?.Info("开始渲染首页...");
+            await RenderDisplayAsync();
+            var msg = $"第 1 页渲染完成: {DisplayWidth}x{DisplayHeight}, {DisplayImage?.Length ?? 0} bytes";
+            System.Diagnostics.Debug.WriteLine($"[PdfVM] {msg}");
+            _appLog?.Info(msg);
+
+            StatusMessage = "正在加载 OCR 文本...";
+            _appLog?.Info("开始加载 OCR 结果...");
+            await LoadPageAsync();
+            await LoadHighlightsAsync();
+            _appLog?.Info($"OCR 加载完成: {Blocks.Count} 块, 高亮: {_docHighlights.Sum(kv => kv.Value.Count)} 条");
+            StatusMessage = $"渲染完成 ({DisplayWidth}x{DisplayHeight}), {Blocks.Count} 文本块";
+            _appLog?.Info("打开文档流程全部完成");
+        }
+        catch (Exception ex)
+        {
+            var err = $"打开文档失败: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[PdfVM] ERROR: {err}\n{ex.StackTrace}");
+            _appLog?.Error(err);
+            ErrorMessage = err;
+        }
+        finally
+        {
+            IsBusy = false;
+            _pageLoaded = true;
+        }
+    }
+
+    /// <summary>视图测得 PDF 可视区域宽度后回调</summary>
+    public void ProvideViewportWidthForFit(double width)
+        => _fitWidthTcs?.TrySetResult(width);
+
+    private async Task<double> RequestViewportWidthAsync()
+    {
+        _fitWidthTcs = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
+        FitToWidthRequested?.Invoke();
+        try
+        {
+            return await _fitWidthTcs.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        catch (TimeoutException)
+        {
+            _appLog?.Warn("等待视口宽度超时，使用默认 800");
+            return 800;
+        }
+    }
+
+    /// <summary>按可视宽度计算横向铺满缩放（不触发渲染）</summary>
+    private void ApplyFitWidthZoom(double viewportWidth)
+    {
+        double pageW = (Rotation % 180 != 0) ? _cachedPageH : _cachedPageW;
+        if (pageW < 1) pageW = 595;
+        float z = (float)(Math.Max(viewportWidth - 8, 40) / pageW);
+        _zoom = Math.Clamp(z, MinZoom, EffectiveMaxZoom());
+        this.RaisePropertyChanged(nameof(Zoom));
+    }
+
+    /// <summary>按页面物理尺寸限制最大缩放，防止渲染位图过大。</summary>
+    private float EffectiveMaxZoom()
+    {
+        double pageMax = Math.Max(_cachedPageW, _cachedPageH);
+        if (pageMax < 1) return MaxZoom;
+        float byEdge = MaxRenderEdgePx / (float)pageMax;
+        return Math.Clamp(byEdge, MinZoom, MaxZoom);
+    }
+
+    public async Task LoadPageAsync()
+    {
+        await LoadPageAtIndexAsync(CurrentPage);
+    }
+
+    /// <summary>加载指定页 OCR 结果到文本列表与 bbox（pageIndex 为 0-based）</summary>
+    public async Task LoadPageAtIndexAsync(int pageIndex)
+    {
+        Blocks.Clear();
+        SelectedBlockIndex = -1;
+        Preprocess = null;
+        FullText = "";
+
+        if (string.IsNullOrEmpty(JsonDir))
+        {
+            _appLog?.Warn("LoadPage: JsonDir 为空，跳过");
+            return;
+        }
+
+        var jsonPath = System.IO.Path.Combine(JsonDir, $"page_{pageIndex + 1}_ocr_result.json");
+        _appLog?.Info($"LoadPage: 第{pageIndex + 1}页 path={jsonPath} exists={File.Exists(jsonPath)}");
+
+        try
+        {
+            var result = await _ocrResult.LoadPageResultAsync(JsonDir, pageIndex);
+            if (result == null)
+            {
+                _appLog?.Warn($"LoadPage: 第{pageIndex + 1}页 无结果或解析失败");
+                UpdateDisplayBboxes();
+                return;
+            }
+
+            Preprocess = result.Preprocess;
+            for (int i = 0; i < result.Blocks.Count; i++)
+            {
+                var b = result.Blocks[i];
+                var full = b.Text ?? "";
+                var vm = new OcrTextBlockViewModel
+                {
+                    RawBbox = b.Bbox ?? Array.Empty<double>(),
+                    Label = b.Label,
+                    Order = b.Order,
+                    Index = i + 1,
+                    SourceKind = b.SourceKind,
+                    SourceIndex = b.SourceIndex,
+                    DisplayBbox = Array.Empty<double>(),
+                };
+                vm.SetCanonicalText(full);
+                Blocks.Add(vm);
+            }
+
+            await UpdateTextDisplayAsync();
+            _applyPageHighlights();
+            _appLog?.Info($"LoadPage: 第{pageIndex + 1}页 加载 {Blocks.Count} 块, scale={Preprocess?.ResizeScale:F4}, angle={Preprocess?.OrientationAngle ?? 0}, ocr={Preprocess?.OrientedWidth}x{Preprocess?.OrientedHeight}");
+        }
+        catch (Exception ex)
+        {
+            _appLog?.Warn($"加载 OCR 失败: {ex.Message}");
+            UpdateDisplayBboxes();
+        }
+    }
+
+    private Task UpdateTextDisplayAsync()
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < Blocks.Count; i++)
+        {
+            Blocks[i].RefreshEditorText(ShowConverted, ConvertToSimplified);
+            var text = Blocks[i].EditorText;
+            sb.AppendLine($"[{i + 1}]");
+            sb.AppendLine(string.IsNullOrWhiteSpace(text) ? "(空)" : text.Trim());
+            sb.AppendLine();
+        }
+        FullText = sb.ToString();
+        UpdateDisplayBboxes();
+        return Task.CompletedTask;
+    }
+
+    public async Task RenderDisplayAsync()
+    {
+        if (_pdfRender == null || string.IsNullOrEmpty(PdfPath)) return;
+
+        try
+        {
+            _appLog?.Info($"RenderDisplayAsync: page={CurrentPage + 1}, zoom={Zoom}, rot={Rotation}");
+            var bytes = await _pdfRender.RenderPageForDisplayAsync(CurrentPage, Zoom, Rotation);
+            _appLog?.Info($"RenderDisplayAsync: 收到 PNG {bytes.Length} bytes");
+
+            bool swap = Rotation % 180 != 0;
+            DisplayWidth = (int)((swap ? _cachedPageH : _cachedPageW) * Zoom);
+            DisplayHeight = (int)((swap ? _cachedPageW : _cachedPageH) * Zoom);
+            DisplayImage = bytes;
+
+            UpdateDisplayBboxes();
+            _appLog?.Info("RenderDisplayAsync: DisplayImage 已设置");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PdfVM] RenderDisplayAsync error: {ex.Message}");
+            _appLog?.Error($"RenderDisplayAsync 失败: {ex.Message}");
+            ErrorMessage = $"页面渲染失败: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// 坐标映射：OCR 图片空间 → 显示空间。
+    ///   摆正坐标系 → (逆方向角) → 上传图空间
+    ///   → (÷resize_scale) → 2x渲染空间 → (÷2) → PDF空间 → (×zoom) → 显示空间
+    /// </summary>
+    public double[] GetScaledBbox(double[] rawBbox)
+    {
+        if (rawBbox.Length < 4) return rawBbox;
+
+        // Step 0: 文档方向校正逆变换（angle=90/180/270 时 bbox 在摆正图上）
+        var mapped = UndoDocOrientation(rawBbox, Preprocess);
+        double x1 = mapped[0], y1 = mapped[1], x2 = mapped[2], y2 = mapped[3];
+
+        // Step 1: 如果存在预处理缩放，先还原到 2x 渲染空间
+        if (Preprocess != null && Preprocess.ResizeScale > 0 && Preprocess.ResizeScale < 1.0)
+        {
+            double scaleUp = 1.0 / Preprocess.ResizeScale;
+            x1 *= scaleUp; y1 *= scaleUp; x2 *= scaleUp; y2 *= scaleUp;
+        }
+
+        // Step 2: 从 2x 空间 → PDF 坐标空间 (÷2) → 显示空间 (×Zoom)
+        x1 = (x1 / 2.0) * Zoom;
+        y1 = (y1 / 2.0) * Zoom;
+        x2 = (x2 / 2.0) * Zoom;
+        y2 = (y2 / 2.0) * Zoom;
+
+        // Step 3: 处理阅读器旋转
+        return ApplyRotation(x1, y1, x2, y2);
+    }
+
+    /// <summary>
+    /// 将方向分类摆正后的 bbox 映射回上传原图坐标。
+    /// angle=90 时模型对原图做了顺时针 90°，逆变换为 (x,y)→(H-y, x)。
+    /// angle=0 时若结果图尺寸与上传图不一致，仍做等比缩放。
+    /// </summary>
+    internal static double[] UndoDocOrientation(double[] bbox, PreprocessInfo? pp)
+    {
+        if (pp == null || bbox.Length < 4) return bbox;
+        int angle = ((pp.OrientationAngle % 360) + 360) % 360;
+
+        int srcW = pp.OrientedWidth;
+        int srcH = pp.OrientedHeight;
+        int dstW = pp.ResizedSize is { Length: >= 2 } ? pp.ResizedSize[0]
+                 : pp.OriginalSize is { Length: >= 2 } ? pp.OriginalSize[0] : 0;
+        int dstH = pp.ResizedSize is { Length: >= 2 } ? pp.ResizedSize[1]
+                 : pp.OriginalSize is { Length: >= 2 } ? pp.OriginalSize[1] : 0;
+
+        double nx1 = bbox[0], ny1 = bbox[1], nx2 = bbox[2], ny2 = bbox[3];
+
+        if (angle != 0 && srcW > 0 && srcH > 0)
+        {
+            double[] MapPoint(double x, double y) => angle switch
+            {
+                90 => new[] { srcH - y, x },
+                180 => new[] { srcW - x, srcH - y },
+                270 => new[] { y, srcW - x },
+                _ => new[] { x, y },
+            };
+
+            var p1 = MapPoint(bbox[0], bbox[1]);
+            var p2 = MapPoint(bbox[2], bbox[1]);
+            var p3 = MapPoint(bbox[0], bbox[3]);
+            var p4 = MapPoint(bbox[2], bbox[3]);
+            nx1 = Math.Min(Math.Min(p1[0], p2[0]), Math.Min(p3[0], p4[0]));
+            ny1 = Math.Min(Math.Min(p1[1], p2[1]), Math.Min(p3[1], p4[1]));
+            nx2 = Math.Max(Math.Max(p1[0], p2[0]), Math.Max(p3[0], p4[0]));
+            ny2 = Math.Max(Math.Max(p1[1], p2[1]), Math.Max(p3[1], p4[1]));
+        }
+
+        // 结果图尺寸 → 上传图尺寸（含 angle=0 时 918x1400 → 904x1390）
+        int midW = (angle is 90 or 270) ? srcH : (srcW > 0 ? srcW : 0);
+        int midH = (angle is 90 or 270) ? srcW : (srcH > 0 ? srcH : 0);
+        if (dstW > 0 && dstH > 0 && midW > 0 && midH > 0
+            && (midW != dstW || midH != dstH))
+        {
+            double sx = (double)dstW / midW;
+            double sy = (double)dstH / midH;
+            nx1 *= sx; nx2 *= sx;
+            ny1 *= sy; ny2 *= sy;
+        }
+
+        return new[] { nx1, ny1, nx2, ny2 };
+    }
+
+    private double[] ApplyRotation(double x1, double y1, double x2, double y2)
+    {
+        double w = DisplayWidth, h = DisplayHeight;
+        return Rotation switch
+        {
+            90 => new[] { w - y2, x1, w - y1, x2 },
+            180 => new[] { w - x2, h - y2, w - x1, h - y1 },
+            270 => new[] { y1, h - x2, y2, h - x1 },
+            _ => new[] { x1, y1, x2, y2 },
+        };
+    }
+
+    private int _bboxVersion;
+    /// <summary>bbox 坐标更新版本号，供视图重绘叠加层</summary>
+    public int BboxVersion
+    {
+        get => _bboxVersion;
+        private set => this.RaiseAndSetIfChanged(ref _bboxVersion, value);
+    }
+
+    private void UpdateDisplayBboxes()
+    {
+        for (int i = 0; i < Blocks.Count; i++)
+        {
+            try
+            {
+                Blocks[i].DisplayBbox = GetScaledBbox(Blocks[i].RawBbox);
+            }
+            catch
+            {
+                Blocks[i].DisplayBbox = Array.Empty<double>();
+            }
+        }
+        BboxVersion++;
+    }
+
+    /// <summary>从显示坐标查找命中的 bbox 索引</summary>
+    public int FindBlockAtPoint(double displayX, double displayY)
+    {
+        for (int i = 0; i < Blocks.Count; i++)
+        {
+            var bb = Blocks[i].DisplayBbox;
+            if (bb.Length == 4)
+            {
+                if (displayX >= bb[0] && displayX <= bb[2] && displayY >= bb[1] && displayY <= bb[3])
+                    return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>处理画布点击</summary>
+    public void OnCanvasClicked(double x, double y)
+    {
+        var idx = FindBlockAtPoint(x, y);
+        SelectedBlockIndex = idx;
+        TextBlockClicked?.Invoke(idx);
+    }
+
+    /// <summary>处理点击事件 (从画布 bbox 或文本面板)</summary>
+    public void OnTextClicked(int blockIndex)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PdfVM] OnTextClicked: block={blockIndex}, total={Blocks.Count}");
+        if (blockIndex >= 0 && blockIndex < Blocks.Count)
+        {
+            // 清除所有旧高亮
+            for (int i = 0; i < Blocks.Count; i++)
+                Blocks[i].IsHighlighted = (i == blockIndex);
+
+            SelectedBlockIndex = blockIndex;
+            TextBlockClicked?.Invoke(blockIndex);  // 触发文本面板滚动
+            _appLog?.Info($"选中文本块 [{blockIndex + 1}]: {Blocks[blockIndex].Text[..Math.Min(Blocks[blockIndex].Text.Length, 40)]}");
+        }
+    }
+
+    /// <summary>
+    /// 由 UI 注入：弹出批量识别进度窗并执行任务。
+    /// 返回 true=正常完成，false=用户取消。
+    /// </summary>
+    public Func<string, string, Func<IProgress<OcrProgress>, CancellationToken, Task>, Task<bool>>? OcrProgressUi { get; set; }
+
+    private async Task OcrCurrentPageAsync()
+    {
+        if (_pdfOcr == null || _libraryItem == null) return;
+        int pageIndex = CurrentPage;
+        // 确保结果目录与当前阅读器一致
+        if (string.IsNullOrEmpty(_libraryItem.OutputDir))
+            _libraryItem.OutputDir = JsonDir;
+        if (string.IsNullOrEmpty(JsonDir) && !string.IsNullOrEmpty(_libraryItem.OutputDir))
+            JsonDir = _libraryItem.OutputDir;
+
+        var success = await RunOcrJobAsync($"单页识别 (第 {pageIndex + 1} 页)", async (progress, ct) =>
+        {
+            var log = new Progress<string>(msg =>
+            {
+                StatusMessage = msg;
+                OcrStatusChanged?.Invoke(msg);
+                progress.Report(new OcrProgress
+                {
+                    CurrentPage = pageIndex + 1,
+                    TotalPages = TotalPages,
+                    Status = msg,
+                });
+            });
+            bool ok = await _pdfOcr.RunSinglePageOcrAsync(_libraryItem, pageIndex, log, ct);
+            if (!ok) throw new Exception("单页识别失败");
+        }, showProgressWindow: false);
+
+        if (!success) return;
+
+        MarkPageOcrDone(pageIndex);
+        // 识别后强制回到该页并刷新文本 + 画面 bbox
+        if (CurrentPage != pageIndex)
+        {
+            _currentPage = pageIndex;
+            this.RaisePropertyChanged(nameof(CurrentPage));
+            this.RaisePropertyChanged(nameof(CurrentPageDisplay));
+            UpdatePageNavCurrent();
+        }
+        await LoadPageAtIndexAsync(pageIndex);
+        await RenderDisplayAsync();
+        _appLog?.Info($"单页识别后刷新: page={pageIndex + 1}, blocks={Blocks.Count}");
+    }
+
+    private async Task OcrAllPagesAsync()
+    {
+        if (_pdfOcr == null || _libraryItem == null) return;
+        if (string.IsNullOrEmpty(_libraryItem.OutputDir))
+            _libraryItem.OutputDir = JsonDir;
+
+        var success = await RunOcrJobAsync("全文识别", async (progress, ct) =>
+        {
+            await _pdfOcr.RunOcrAsync(_libraryItem, progress, ct);
+        }, showProgressWindow: true);
+        if (!success) return;
+        RefreshPageNavOcrStatus();
+        await LoadPageAsync();
+        await RenderDisplayAsync();
+    }
+
+    private async Task OcrRangeAsync()
+    {
+        if (_pdfOcr == null || _libraryItem == null) return;
+        if (!int.TryParse(RangeFrom.Trim(), out int from) || !int.TryParse(RangeTo.Trim(), out int to))
+        {
+            ErrorMessage = "页码范围请输入数字";
+            return;
+        }
+        if (from < 1 || to < 1 || from > TotalPages || to > TotalPages || from > to)
+        {
+            ErrorMessage = $"页码范围无效，请输入 1–{TotalPages}，且起始 ≤ 结束";
+            return;
+        }
+        if (string.IsNullOrEmpty(_libraryItem.OutputDir))
+            _libraryItem.OutputDir = JsonDir;
+
+        var success = await RunOcrJobAsync($"范围识别 ({from}-{to})", async (progress, ct) =>
+        {
+            await _pdfOcr.RunPageRangeOcrAsync(
+                _libraryItem, from - 1, to - 1, skipExisting: true, progress, ct);
+        }, showProgressWindow: true);
+        if (!success) return;
+        RefreshPageNavOcrStatus();
+        await LoadPageAsync();
+        await RenderDisplayAsync();
+    }
+
+    /// <returns>是否成功完成（非异常中断；取消视为 false）</returns>
+    private async Task<bool> RunOcrJobAsync(
+        string title,
+        Func<IProgress<OcrProgress>, CancellationToken, Task> work,
+        bool showProgressWindow = false)
+    {
+        if (IsOcrRunning) return false;
+        IsOcrRunning = true;
+        ClearError();
+        StatusMessage = $"{title}...";
+        OcrStatusChanged?.Invoke(StatusMessage);
+        _appLog?.Info($"PDF OCR: {title}");
+        try
+        {
+            async Task BindAndRunAsync(IProgress<OcrProgress> sink, CancellationToken ct)
+            {
+                var progress = new Progress<OcrProgress>(p =>
+                {
+                    var msg = p.IsCancelled
+                        ? $"{title}: {p.Status}"
+                        : p.IsError
+                            ? $"{title}: {p.Status}"
+                            : $"{title} [{p.CurrentPage}/{p.TotalPages}]: {p.Status}";
+                    StatusMessage = msg;
+                    OcrStatusChanged?.Invoke(msg);
+                    if (p.CurrentPage >= 1)
+                        MarkPageOcrDone(p.CurrentPage - 1);
+                    sink.Report(p);
+                });
+                await work(progress, ct);
+            }
+
+            if (showProgressWindow && OcrProgressUi != null)
+            {
+                bool completed = await OcrProgressUi(title, DocumentName, BindAndRunAsync);
+                if (!completed)
+                {
+                    StatusMessage = $"{title} 已取消";
+                    OcrStatusChanged?.Invoke(StatusMessage);
+                    _appLog?.Info($"PDF OCR 已取消: {title}");
+                    return false;
+                }
+            }
+            else
+            {
+                await BindAndRunAsync(new Progress<OcrProgress>(_ => { }), CancellationToken.None);
+            }
+
+            StatusMessage = $"{title} 完成";
+            OcrStatusChanged?.Invoke(StatusMessage);
+            _appLog?.Info($"PDF OCR 完成: {title}");
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = $"{title} 已取消";
+            OcrStatusChanged?.Invoke(StatusMessage);
+            _appLog?.Info($"PDF OCR 已取消: {title}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"{title} 失败: {ex.Message}";
+            OcrStatusChanged?.Invoke(ErrorMessage);
+            _appLog?.Error($"PDF OCR 失败: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            IsOcrRunning = false;
+        }
+    }
+
+    /// <summary>跳转到指定页（0-based）</summary>
+    public Task JumpToPageAsync(int pageIndex) => GoToPageAsync(pageIndex);
+
+    private async Task GoToPageAsync(int pageIndex)
+    {
+        if (pageIndex < 0 || pageIndex >= TotalPages || pageIndex == CurrentPage) return;
+        _currentPage = pageIndex;
+        this.RaisePropertyChanged(nameof(CurrentPage));
+        this.RaisePropertyChanged(nameof(CurrentPageDisplay));
+        UpdatePageNavCurrent();
+        await RenderDisplayAsync();
+        await LoadPageAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (CurrentPage < TotalPages - 1)
+            await GoToPageAsync(CurrentPage + 1);
+    }
+
+    private async Task PrevPageAsync()
+    {
+        if (CurrentPage > 0)
+            await GoToPageAsync(CurrentPage - 1);
+    }
+
+    private void RebuildPageNavItems()
+    {
+        PageNavItems.Clear();
+        for (int i = 0; i < TotalPages; i++)
+        {
+            PageNavItems.Add(new PdfPageNavItem
+            {
+                PageIndex = i,
+                PageNumber = i + 1,
+                HasOcr = HasOcrResult(i),
+                IsCurrent = i == CurrentPage,
+            });
+        }
+    }
+
+    private void RefreshPageNavOcrStatus()
+    {
+        for (int i = 0; i < PageNavItems.Count; i++)
+            PageNavItems[i].HasOcr = HasOcrResult(i);
+    }
+
+    private void UpdatePageNavCurrent()
+    {
+        for (int i = 0; i < PageNavItems.Count; i++)
+            PageNavItems[i].IsCurrent = i == CurrentPage;
+    }
+
+    private void MarkPageOcrDone(int pageIndex)
+    {
+        if (pageIndex < 0 || pageIndex >= PageNavItems.Count) return;
+        PageNavItems[pageIndex].HasOcr = HasOcrResult(pageIndex);
+    }
+
+    private bool HasOcrResult(int pageIndex)
+    {
+        if (string.IsNullOrEmpty(JsonDir)) return false;
+        var jsonPath = System.IO.Path.Combine(JsonDir, $"page_{pageIndex + 1}_ocr_result.json");
+        return File.Exists(jsonPath);
+    }
+
+    private async Task SaveTextAsync()
+    {
+        if (string.IsNullOrEmpty(JsonDir))
+        {
+            ErrorMessage = "未找到 OCR 结果目录";
+            return;
+        }
+        if (Blocks.Count == 0)
+        {
+            StatusMessage = "当前页无文本可保存";
+            return;
+        }
+
+        try
+        {
+            // 编辑框 → 规范文本（简体预览下仅当用户改过才覆盖原文）
+            foreach (var b in Blocks)
+                b.CommitEditorToText(ShowConverted, ConvertToSimplified);
+
+            var edits = Blocks
+                .Where(b => b.SourceIndex >= 0)
+                .Select(b => new OcrTextEdit
+                {
+                    SourceKind = b.SourceKind,
+                    SourceIndex = b.SourceIndex,
+                    Text = b.Text ?? "",
+                })
+                .ToList();
+
+            if (edits.Count == 0)
+            {
+                ErrorMessage = "无法定位文本块写回位置";
+                return;
+            }
+
+            await _ocrResult.SavePageTextsAsync(JsonDir, CurrentPage, edits);
+            await UpdateTextDisplayAsync();
+            ClearError();
+            StatusMessage = $"已保存 {edits.Count} 个文本块";
+            _appLog?.Info($"OCR 文本已写回: page={CurrentPage + 1}, blocks={edits.Count}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"保存失败: {ex.Message}";
+            _appLog?.Error($"OCR 文本写回失败: {ex.Message}");
+        }
+    }
+
+    // ---- 高亮管理 ----
+
+    /// <summary>视图中当前文本选择的文本内容（由 View 层在点击高亮前设置）。</summary>
+    public string? PendingHighlightText { get; set; }
+
+    private async Task LoadHighlightsAsync()
+    {
+        if (_highlightService == null || string.IsNullOrEmpty(JsonDir)) return;
+        _docHighlights = await _highlightService.LoadAsync(JsonDir);
+        _appLog?.Info($"[HL] LoadHighlights — loaded {_docHighlights.Sum(kv => kv.Value.Count)} entries from highlights.json (pages: {string.Join(",", _docHighlights.Keys)})");
+        _applyPageHighlights();
+    }
+
+    private void _applyPageHighlights()
+    {
+        _appLog?.Info($"[HL] ApplyHighlights — page={CurrentPage}, blocks={Blocks.Count}, docHLPages={_docHighlights.Count}");
+
+        foreach (var b in Blocks)
+        {
+            b.UserHighlightColor = null;
+            b.HighlightedSegments = Array.Empty<HighlightSegment>();
+        }
+
+        if (!_docHighlights.TryGetValue(CurrentPage, out var pageHighlights))
+        {
+            _appLog?.Info($"[HL] ApplyHighlights — no highlights for page {CurrentPage}");
+            HighlightsChanged?.Invoke();
+            return;
+        }
+        _appLog?.Info($"[HL] ApplyHighlights — page {CurrentPage} has {pageHighlights.Count} entries: {string.Join(", ", pageHighlights.Select(h => $"'{h.Text?[..Math.Min(h.Text?.Length ?? 0, 20)]}'"))}");
+
+        foreach (var block in Blocks)
+        {
+            var text = block.Text ?? "";
+            if (string.IsNullOrWhiteSpace(text)) continue;
+
+            // 收集该块中所有匹配的高亮区间
+            var matches = new List<(int start, int len, string color)>();
+            foreach (var hl in pageHighlights)
+            {
+                var hlText = hl.Text ?? "";
+                if (string.IsNullOrEmpty(hlText)) continue;
+                int pos = 0;
+                while ((pos = text.IndexOf(hlText, pos, StringComparison.Ordinal)) != -1)
+                {
+                    matches.Add((pos, hlText.Length, hl.Color));
+                    pos += hlText.Length;
+                }
+            }
+
+            if (matches.Count == 0) continue;
+
+            // 合并重叠区间，按起始位置排序
+            matches.Sort((a, b) => a.start.CompareTo(b.start));
+
+            // 构建分段（高亮段 + 普通段交错）
+            var segments = new List<HighlightSegment>();
+            int cursor = 0;
+            foreach (var (start, len, color) in matches)
+            {
+                if (start > cursor)
+                {
+                    // 高亮之前的普通文本
+                    segments.Add(new HighlightSegment { Text = text[cursor..start] });
+                }
+                // 高亮文本
+                var end = Math.Min(start + len, text.Length);
+                segments.Add(new HighlightSegment { Text = text[start..end], BgHex = color });
+                cursor = end;
+            }
+            // 剩余普通文本
+            if (cursor < text.Length)
+                segments.Add(new HighlightSegment { Text = text[cursor..] });
+
+            block.HighlightedSegments = segments;
+            // 全块匹配时同时设置整块底色
+            if (matches.Any(m => m.start == 0 && m.len == text.Length))
+                block.UserHighlightColor = matches.First(m => m.start == 0 && m.len == text.Length).color;
+        }
+
+        int totalSegments = Blocks.Sum(b => b.HighlightedSegments.Count);
+        int blocksWithSegments = Blocks.Count(b => b.HighlightedSegments.Count > 0);
+        _appLog?.Info($"[HL] ApplyHighlights DONE — totalSegments={totalSegments}, blocksWithHL={blocksWithSegments}, subs={HighlightsChanged?.GetInvocationList().Length ?? 0}");
+        HighlightsChanged?.Invoke();
+    }
+
+    private async Task AddHighlightAsync()
+    {
+        _appLog?.Info($"[HL] AddHighlight ENTER — selIdx={SelectedBlockIndex}, pendingText='{PendingHighlightText?[..Math.Min(PendingHighlightText?.Length ?? 0, 30)]}'");
+
+        if (_highlightService == null || SelectedBlockIndex < 0 || SelectedBlockIndex >= Blocks.Count)
+        {
+            _appLog?.Warn($"[HL] AddHighlight ABORT — svc={_highlightService != null}, idx={SelectedBlockIndex}, cnt={Blocks.Count}");
+            return;
+        }
+
+        var block = Blocks[SelectedBlockIndex];
+        var blockText = (block.Text ?? "").Trim();
+        var selectedText = PendingHighlightText?.Trim();
+
+        // 验证选中文字确实属于当前块（全局 PointerReleased 可能捕获了其他块的选中文字）
+        var isFullBlock = true;
+        var text = blockText;
+        if (!string.IsNullOrEmpty(selectedText))
+        {
+            if (blockText.Contains(selectedText, StringComparison.Ordinal))
+            {
+                isFullBlock = false;
+                text = selectedText;
+            }
+            else
+            {
+                _appLog?.Warn($"[HL] Selected text '{selectedText[..Math.Min(selectedText.Length, 20)]}' NOT found in block[{SelectedBlockIndex}] — ignoring stale selection, using full block");
+            }
+        }
+        _appLog?.Info($"[HL] AddHighlight — isFullBlock={isFullBlock}, textLen={text.Length}, block[{SelectedBlockIndex}] fullText='{blockText[..Math.Min(blockText.Length, 40)]}', highlightText='{text[..Math.Min(text.Length, 40)]}'");
+
+        if (string.IsNullOrWhiteSpace(text)) return;
+        PendingHighlightText = null;
+
+        _highlightService.AddHighlight(_docHighlights, CurrentPage, text, "#FFEB3B");
+        _appLog?.Info($"[HL] Added to memory — docHighlights total={_docHighlights.Sum(kv => kv.Value.Count)} entries");
+
+        _applyPageHighlights();
+
+        _appLog?.Info($"[HL] Saving highlights.json...");
+        await _highlightService.SaveAsync(JsonDir, _docHighlights);
+        _appLog?.Info($"[HL] Save complete — block[{SelectedBlockIndex}].IsEditing=false, segments={block.HighlightedSegments.Count}");
+
+        block.IsEditing = false;
+        _appLog?.Info($"高亮: 第{CurrentPage + 1}页 [{SelectedBlockIndex + 1}] \"{text[..Math.Min(text.Length, 30)]}\" 已标记");
+    }
+
+    private async Task ClearHighlightsAsync()
+    {
+        if (_highlightService == null) return;
+        if (!_docHighlights.ContainsKey(CurrentPage)) return; // 本页无高亮，跳过
+
+        _highlightService.RemovePageHighlights(_docHighlights, CurrentPage);
+        // 重新计算分段 → 所有块恢复无高亮状态
+        _applyPageHighlights();
+
+        // 确保所有块回到查看模式
+        foreach (var b in Blocks)
+            b.IsEditing = false;
+
+        await _highlightService.SaveAsync(JsonDir, _docHighlights);
+        _appLog?.Info($"清除高亮: 第{CurrentPage + 1}页");
+    }
+
+    // ---- 搜索 / 高亮列表 / 导出 ----
+
+    private async Task OpenSearchAsync()
+    {
+        if (_searchService == null || string.IsNullOrEmpty(JsonDir)) return;
+
+        var opener = OpenSearchDialogAsync;
+        if (opener == null) return;
+
+        var result = await opener();
+        if (result.HasValue)
+            await NavigateToBlock(result.Value.pageIndex, result.Value.blockIndex);
+    }
+
+    private async Task OpenHighlightListAsync()
+    {
+        if (_highlightService == null || string.IsNullOrEmpty(JsonDir)) return;
+        if (_docHighlights.Count == 0) return;
+
+        var opener = OpenHighlightListDialogAsync;
+        if (opener == null) return;
+
+        var result = await opener();
+        if (result.HasValue)
+            await NavigateToBlock(result.Value.pageIndex, result.Value.blockIndex);
+    }
+
+    private async Task ExportFullTextAsync()
+    {
+        if (_exportService == null || string.IsNullOrEmpty(JsonDir)) return;
+
+        var documentName = DocumentName ?? "未命名文献";
+        var fileName = $"{documentName}.txt";
+
+        // 通过事件让 View 层触发保存对话框
+        var outputPath = SaveFileDialogRequested != null
+            ? await SaveFileDialogRequested.Invoke(documentName, fileName)
+            : null;
+
+        if (string.IsNullOrEmpty(outputPath)) return;
+
+        try
+        {
+            await _exportService.ExportToTxtAsync(JsonDir, TotalPages, documentName, outputPath);
+            StatusMessage = $"全文已导出到: {outputPath}";
+            _appLog?.Info($"全文导出完成: {outputPath}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"导出失败: {ex.Message}";
+            _appLog?.Error($"全文导出失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>获取搜索服务（供视图层创建搜索对话框）</summary>
+    public ISearchService? SearchService => _searchService;
+
+    /// <summary>获取当前文档的全部高亮数据（供对话框使用）</summary>
+    public IReadOnlyDictionary<int, IReadOnlyList<HighlightEntry>> GetDocHighlights()
+        => _docHighlights.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<HighlightEntry>)kv.Value.AsReadOnly());
+
+    /// <summary>供对话框使用的跳转到指定块（强制翻页+选中）</summary>
+    public async Task NavigateToBlock(int pageIndex, int blockIndex)
+    {
+        if (pageIndex < 0 || pageIndex >= TotalPages) return;
+
+        if (CurrentPage != pageIndex)
+        {
+            _currentPage = pageIndex;
+            this.RaisePropertyChanged(nameof(CurrentPage));
+            this.RaisePropertyChanged(nameof(CurrentPageDisplay));
+            UpdatePageNavCurrent();
+            await RenderDisplayAsync();
+            await LoadPageAsync();
+        }
+
+        if (blockIndex >= 0 && blockIndex < Blocks.Count)
+            OnTextClicked(blockIndex);
+    }
+
+    private static string ConvertToSimplified(string text)
+    {
+        // 简单降级方案：常用繁简字映射
+        var map = new Dictionary<char, char>
+        {
+            ['裡']='里',['後']='后',['體']='体',['發']='发',['雲']='云',
+            ['氣']='气',['東']='东',['書']='书',['車']='车',['馬']='马',
+            ['開']='开',['門']='门',['飛']='飞',['風']='风',['龍']='龙',
+            ['國']='国',['華']='华',['為']='为',['會']='会',['學']='学',
+            ['習']='习',['進']='进',['動']='动',['變']='变',['過']='过',
+            ['說']='说',['見']='见',['長']='长',['時']='时',['間']='间',
+            ['關']='关',['頭']='头',['實']='实',['無']='无',['來']='来',
+            ['對']='对',['個']='个',['們']='们',['萬']='万',['業']='业',
+        };
+        var sb = new System.Text.StringBuilder(text.Length);
+        foreach (char c in text)
+            sb.Append(map.TryGetValue(c, out var s) ? s : c);
+        return sb.ToString();
+    }
+}
+
+/// <summary>ViewModel 层的 OCR 文本块，附加显示 bbox</summary>
+public class OcrTextBlockViewModel : ReactiveObject
+{
+    public double[] RawBbox { get; set; } = Array.Empty<double>();
+    public double[] DisplayBbox { get; set; } = Array.Empty<double>();
+
+    private string _text = "";
+    /// <summary>规范文本（写回 JSON）</summary>
+    public string Text
+    {
+        get => _text;
+        set => this.RaiseAndSetIfChanged(ref _text, value);
+    }
+
+    private string _editorText = "";
+    /// <summary>右侧编辑框绑定（可为繁→简预览）</summary>
+    public string EditorText
+    {
+        get => _editorText;
+        set => this.RaiseAndSetIfChanged(ref _editorText, value);
+    }
+
+    /// <summary>兼容旧绑定名</summary>
+    public string PreviewText
+    {
+        get => EditorText;
+        set => EditorText = value;
+    }
+
+    public string? Label { get; set; }
+    public int Order { get; set; }
+    public int Index { get; set; }  // 块序号 (1-based)
+    public OcrTextSourceKind SourceKind { get; set; } = OcrTextSourceKind.Layout;
+    public int SourceIndex { get; set; } = -1;
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => this.RaiseAndSetIfChanged(ref _isSelected, value);
+    }
+
+    private bool _isHighlighted;
+    public bool IsHighlighted
+    {
+        get => _isHighlighted;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isHighlighted, value);
+            this.RaisePropertyChanged(nameof(EffectiveHighlightColor));
+        }
+    }
+
+    private string? _userHighlightColor;
+    /// <summary>用户手动高亮的颜色（null = 无手动高亮）</summary>
+    public string? UserHighlightColor
+    {
+        get => _userHighlightColor;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _userHighlightColor, value);
+            this.RaisePropertyChanged(nameof(EffectiveHighlightColor));
+        }
+    }
+
+    /// <summary>有效的块级底色（整块匹配时使用）</summary>
+    public string? EffectiveHighlightColor
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(UserHighlightColor))
+                return UserHighlightColor;
+            if (IsHighlighted)
+                return "#CCFFCC";
+            return null;
+        }
+    }
+
+    private IReadOnlyList<HighlightSegment> _highlightedSegments = Array.Empty<HighlightSegment>();
+    public IReadOnlyList<HighlightSegment> HighlightedSegments
+    {
+        get => _highlightedSegments;
+        set => this.RaiseAndSetIfChanged(ref _highlightedSegments, value);
+    }
+
+    private bool _isEditing;
+    /// <summary>是否处于编辑模式（显示 TextBox）。false=只读 TextBlock 模式。</summary>
+    public bool IsEditing
+    {
+        get => _isEditing;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isEditing, value);
+            this.RaisePropertyChanged(nameof(IsViewing));
+        }
+    }
+    /// <summary>查看模式（非编辑模式）。</summary>
+    public bool IsViewing => !IsEditing;
+
+    public void SetCanonicalText(string text)
+    {
+        Text = text ?? "";
+        EditorText = Text;
+    }
+
+    /// <summary>按繁简模式从规范文本刷新编辑框</summary>
+    public void RefreshEditorText(bool showConverted, Func<string, string> convert)
+    {
+        EditorText = showConverted ? convert(Text ?? "") : (Text ?? "");
+    }
+
+    /// <summary>
+    /// 将编辑框写回规范文本。
+    /// 简体预览模式下：仅当编辑内容相对「原文的简体」有变化时才覆盖 Text。
+    /// </summary>
+    public void CommitEditorToText(bool editorWasConverted, Func<string, string> convert)
+    {
+        var edited = EditorText ?? "";
+        if (editorWasConverted)
+        {
+            var baseline = convert(Text ?? "");
+            if (!string.Equals(edited, baseline, StringComparison.Ordinal))
+                Text = edited;
+        }
+        else
+        {
+            Text = edited;
+        }
+    }
+}

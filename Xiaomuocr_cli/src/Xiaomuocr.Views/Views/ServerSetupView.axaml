@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.Views.Views.ServerSetupView">
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Border Background="#FDFBF7" CornerRadius="12" Padding="40,32"
+                MaxWidth="460">
+            <StackPanel Spacing="14">
+                <!-- 标题 -->
+                <TextBlock Text="小木史料阅读器" FontSize="28" FontWeight="Bold"
+                           Foreground="#2D3A2C" HorizontalAlignment="Center" />
+                <TextBlock Text="首次使用 · 设置服务器" FontSize="15" Foreground="#5C5344"
+                           HorizontalAlignment="Center" Margin="0,0,0,10" />
+                <TextBlock Text="请输入小木OCR服务器的地址。"
+                           FontSize="12" Foreground="#8B8370"
+                           TextWrapping="Wrap" Margin="0,0,0,2" />
+                <TextBlock Text="如果您不确定，请联系管理员获取。"
+                           FontSize="12" Foreground="#8B8370"
+                           TextWrapping="Wrap" Margin="0,0,0,6" />
+
+                <!-- 地址输入 -->
+                <TextBlock Text="服务器地址" FontSize="13" Foreground="#2D3A2C" />
+                <TextBox Text="{Binding ServerAddress}"
+                         Watermark="例如: http://117.72.35.21"
+                         FontSize="14" Padding="10,8" />
+
+                <!-- 状态 / 错误消息 -->
+                <TextBlock Text="{Binding StatusMessage}" Foreground="#4A7C59"
+                           FontSize="12" IsVisible="{Binding HasStatus}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C"
+                           FontSize="12" IsVisible="{Binding HasError}"
+                           TextWrapping="Wrap" />
+
+                <!-- 按钮 -->
+                <Button Content="测试连接并继续" Command="{Binding TestAndSaveCommand}"
+                        Background="#4A7C59" Foreground="White"
+                        FontSize="14" FontWeight="Bold" Padding="0,12"
+                        CornerRadius="8" HorizontalAlignment="Stretch" />
+
+                <Button Content="离线阅读" Command="{Binding OfflineReadingCommand}"
+                        Background="#EAE5D9" Foreground="#5C5344"
+                        FontSize="13" Padding="0,10"
+                        CornerRadius="8" HorizontalAlignment="Stretch" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

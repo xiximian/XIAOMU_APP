@@ -1,0 +1,150 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:svc="clr-namespace:Xiaomuocr.Core.Services;assembly=Xiaomuocr.Core"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+        x:Class="Xiaomuocr.App.MainWindow"
+        Title="小木史料阅读器"
+        MinWidth="900" MinHeight="550">
+
+    <Grid ColumnDefinitions="Auto,*" RowDefinitions="*,Auto">
+        <!-- Sidebar：底栏限高停靠，顶栏占剩余并可滚 —— 矮窗口不重叠 -->
+        <Border Grid.Column="0" Name="SidebarBorder" Background="#2D3A2C" Width="168"
+                ClipToBounds="True">
+            <DockPanel LastChildFill="True">
+                <!-- 底部先测量；MaxHeight 防止抢占菜单空间 -->
+                <Border DockPanel.Dock="Bottom"
+                        MaxHeight="220"
+                        BorderBrush="#3A4A38"
+                        BorderThickness="0,1,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  MaxHeight="220">
+                        <StackPanel Margin="12,8,8,12" Spacing="4">
+                            <TextBlock Name="WelcomeLabel"
+                                       Foreground="#8B8370" FontSize="11" TextWrapping="Wrap" />
+                            <Button Content="📋 日志" Background="Transparent" Foreground="#B8C5B0"
+                                    HorizontalAlignment="Stretch" Padding="8,4"
+                                    Click="OnLogClick" />
+                            <Button Content="退出登录" Background="#B8443C" Foreground="White"
+                                    HorizontalAlignment="Stretch" Padding="8,4"
+                                    Click="OnLogoutClick" />
+                            <TextBlock Text="最近任务" Foreground="#8B8370" FontSize="10"
+                                       Margin="0,6,0,0" />
+                            <ItemsControl Name="RecentTasksList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type svc:RecognitionTaskItem}">
+                                        <Border Background="#3A4A38" CornerRadius="6" Padding="8,6"
+                                                Margin="0,0,0,4" Cursor="Hand"
+                                                PointerPressed="OnRecentTaskPressed"
+                                                Tag="{Binding BatchUuid}">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="11"
+                                                           Foreground="#E8F0E4" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding PagesLabel}" FontSize="10"
+                                                           Foreground="#8B8370" />
+                                                <TextBlock Text="{Binding ProgressText}" FontSize="10"
+                                                           Foreground="#B8C5B0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- 顶部菜单：占满剩余高度，不够则滚动 -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="4" Margin="12,16,8,8">
+                        <TextBlock Text="史料阅读器" FontSize="16" FontWeight="Bold"
+                                   Foreground="White" Margin="0,0,0,20" />
+
+                        <Button Name="BtnLibrary" Content="📚 文献库"
+                                Background="Transparent" Foreground="#B8C5B0"
+                                HorizontalAlignment="Stretch" Padding="8,6"
+                                Click="OnLibraryClick" />
+
+                        <Button Name="BtnAccount" Content="💰 账户"
+                                Background="Transparent" Foreground="#B8C5B0"
+                                HorizontalAlignment="Stretch" Padding="8,6"
+                                Click="OnAccountClick" />
+
+                        <Button Name="BtnTaskCenter" Content="📌 任务中心"
+                                Background="Transparent" Foreground="#B8C5B0"
+                                HorizontalAlignment="Stretch" Padding="8,6"
+                                Click="OnTaskCenterClick" />
+
+                        <Button Name="BtnHistory" Content="📋 历史"
+                                Background="Transparent" Foreground="#B8C5B0"
+                                HorizontalAlignment="Stretch" Padding="8,6"
+                                Click="OnHistoryClick" />
+
+                        <Button Name="BtnSettings" Content="⚙ 设置"
+                                Background="Transparent" Foreground="#B8C5B0"
+                                HorizontalAlignment="Stretch" Padding="8,6"
+                                Click="OnSettingsClick" />
+
+                        <Button Name="BtnHelp" Content="❓ 帮助"
+                                Background="Transparent" Foreground="#B8C5B0"
+                                HorizontalAlignment="Stretch" Padding="8,6"
+                                Click="OnHelpClick" />
+
+                        <Button Name="BtnFeedback" Content="💬 联系反馈"
+                                Background="Transparent" Foreground="#B8C5B0"
+                                HorizontalAlignment="Stretch" Padding="8,6"
+                                Click="OnFeedbackClick" />
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- Content area: shell menus + persistent PDF document tabs -->
+        <Border Grid.Column="1" Background="#D4E5D9">
+            <DockPanel>
+                <Border Name="DocTabBar" DockPanel.Dock="Top"
+                        Background="#B8CDBE" Padding="6,6,6,0"
+                        IsVisible="False">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Name="DocTabPanel" Orientation="Horizontal" Spacing="4" />
+                    </ScrollViewer>
+                </Border>
+                <Panel>
+                    <ContentControl Name="ContentArea" />
+                    <ContentControl Name="DocHost" IsVisible="False" />
+                </Panel>
+            </DockPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#2D3A2C" Padding="12,4">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Name="StatusText" Foreground="#8B8370" FontSize="11" />
+                <Border Name="OfflineBadge" CornerRadius="3" Padding="6,1"
+                        Background="#9B722E" IsVisible="False">
+                    <TextBlock Text="离线模式" Foreground="White" FontSize="10" FontWeight="Bold" />
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- 右下角：后台下载更新安装包提示 -->
+        <Border Name="UpdateToast" Grid.Row="0" Grid.Column="1"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,16,12" Padding="14,10" CornerRadius="8"
+                Background="#F5F0E6" BorderBrush="#C4B89A" BorderThickness="1"
+                IsVisible="False" ZIndex="100" MaxWidth="320"
+                BoxShadow="0 2 8 0 #40000000">
+            <StackPanel Spacing="6">
+                <TextBlock Name="UpdateToastTitle" Text="正在下载新版本安装包"
+                           FontSize="12" FontWeight="SemiBold" Foreground="#2D3A2C" />
+                <TextBlock Name="UpdateToastText" Text=""
+                           FontSize="11" Foreground="#5C5344" TextWrapping="Wrap" />
+                <ProgressBar Name="UpdateToastProgress" Minimum="0" Maximum="100"
+                             Height="4" Foreground="#4A7C59" Background="#EAE5D9" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

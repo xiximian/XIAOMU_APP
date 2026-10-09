@@ -1,0 +1,256 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.Views.Views.AccountView">
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- Top: Error / Status messages (full width) -->
+        <StackPanel Grid.Row="0" Spacing="8" Margin="24,20,24,0">
+            <Border Background="#F5E0DC" CornerRadius="6" Padding="8,6"
+                    IsVisible="{Binding HasError}">
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C" FontSize="12"
+                           TextWrapping="Wrap" />
+            </Border>
+            <Border Background="#F2E6C8" CornerRadius="6" Padding="8,6"
+                    IsVisible="{Binding HasStatus}">
+                <TextBlock Text="{Binding StatusMessage}" Foreground="#5C5344" FontSize="12"
+                           TextWrapping="Wrap" />
+            </Border>
+        </StackPanel>
+
+        <!-- Two-column layout, each column scrolls independently -->
+        <Grid Grid.Row="1" ColumnDefinitions="2*,3*" Margin="0,12,0,0">
+
+            <!-- ====== LEFT COLUMN: Account info, Balance, Recharge, Owned packages ====== -->
+            <ScrollViewer Grid.Column="0" Padding="24,0,12,20">
+                <StackPanel Spacing="16">
+
+                    <!-- User info -->
+                    <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="账户信息" FontSize="18" FontWeight="Bold" Foreground="#2D3A2C" />
+                            <TextBlock Foreground="#5C5344" Text="{Binding Username, StringFormat='账号: {0}'}" />
+                            <TextBlock Foreground="#5C5344" Text="{Binding Email, StringFormat='邮箱: {0}'}" />
+                            <TextBlock Text="显示名称" FontSize="13" Foreground="#3D4A3E" Margin="0,6,0,0" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBox Text="{Binding DisplayName}" Width="160" MaxLength="32"
+                                         Watermark="可留空" />
+                                <Button Content="保存"
+                                        Command="{Binding SaveDisplayNameCommand}"
+                                        Background="#4A7C59" Foreground="White"
+                                        FontSize="12" Padding="12,6" CornerRadius="6" />
+                            </StackPanel>
+                            <TextBlock Text="留言板优先显示此名称；留空则用微信昵称或脱敏手机号"
+                                       FontSize="11" Foreground="#8B8370" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ProfileMessage}" FontSize="12"
+                                       Foreground="#4A7C59" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Balance + package summary -->
+                    <Border Background="#4A7C59" CornerRadius="10" Padding="20,16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="可用余额" Foreground="#B8C5B0" FontSize="13" />
+                            <TextBlock Foreground="White" FontSize="32" FontWeight="Bold"
+                                       Text="{Binding Available, StringFormat='¥ {0:F2}'}" />
+                            <TextBlock Foreground="#B8C5B0" FontSize="12"
+                                       Text="{Binding BalanceAmount, StringFormat='总额: ¥ {0:F2}'}" />
+                            <TextBlock Foreground="#D4E5D9" FontSize="13" FontWeight="SemiBold" Margin="0,6,0,0"
+                                       Text="{Binding PackageRemainingDisplay}" />
+                            <TextBlock Foreground="#B8C5B0" FontSize="11"
+                                       Text="{Binding PaygPriceDisplay}" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+                                <Button Content="充 值"
+                                        Command="{Binding ToggleRechargeCommand}"
+                                        Background="#FDFBF7" Foreground="#4A7C59"
+                                        FontWeight="Bold" Padding="16,8" CornerRadius="8" />
+                                <Button Content="🔄 刷新"
+                                        Command="{Binding RefreshCommand}"
+                                        Background="#2D5A3D" Foreground="White"
+                                        FontSize="12" Padding="12,6" CornerRadius="8"
+                                        IsEnabled="{Binding !IsBusy}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Recharge panel -->
+                    <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                            IsVisible="{Binding IsRechargeVisible}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="账户充值" FontSize="16" FontWeight="Bold" Foreground="#2D3A2C" />
+                            <TextBlock Text="充值后可用于购买识别套餐，或在套餐耗尽后按量计费。"
+                                       FontSize="12" Foreground="#5C5344" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="金额:" VerticalAlignment="Center" />
+                                <TextBox Text="{Binding RechargeAmountText}" Width="120"
+                                         Watermark="金额" />
+                                <TextBlock Text="元" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding RechargeMessage}" FontSize="12"
+                                       Foreground="#4A7C59" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Button Content="微信充值"
+                                        Command="{Binding WechatRechargeCommand}"
+                                        Background="#07C160" Foreground="White"
+                                        Padding="16,6" CornerRadius="6"
+                                        IsEnabled="{Binding !IsBusy}" />
+                                <Button Content="支付宝充值"
+                                        Command="{Binding AlipayRechargeCommand}"
+                                        Background="#1677FF" Foreground="White"
+                                        Padding="16,6" CornerRadius="6"
+                                        IsEnabled="{Binding !IsBusy}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Owned packages -->
+                    <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="我的套餐" FontSize="18" FontWeight="Bold" Foreground="#2D3A2C" />
+
+                            <Border IsVisible="{Binding IsOwnedPackagesEmpty}"
+                                    Padding="12,10" Background="#EAE5D9" CornerRadius="6">
+                                <TextBlock Text="暂无生效中的套餐。识别将按量从余额扣费，或购买右侧资源包更优惠。"
+                                           FontSize="13" Foreground="#5C5344" TextWrapping="Wrap" />
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding OwnedPackages}"
+                                          IsVisible="{Binding HasOwnedPackages}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#E8F0E9" BorderBrush="#B8C5B0" BorderThickness="1"
+                                                CornerRadius="8" Padding="14,12" Margin="0,0,0,8">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="15"
+                                                           FontWeight="SemiBold" Foreground="#2D5A3D" />
+                                                <TextBlock Text="{Binding RemainingDisplay}" FontSize="13"
+                                                           Foreground="#2D5A3D" />
+                                                <TextBlock Text="{Binding ExpiresDisplay}" FontSize="12"
+                                                           Foreground="#5C5344" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ====== RIGHT COLUMN: Sale plans, Consumption records ====== -->
+            <ScrollViewer Grid.Column="1" Padding="12,0,24,20">
+                <StackPanel Spacing="16">
+
+                    <!-- Sale plans -->
+                    <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="识别套餐" FontSize="18" FontWeight="Bold" Foreground="#2D3A2C" />
+                            <TextBlock Text="购买后优先消耗套餐页数；耗尽后自动按量计费。费用从账户余额扣除。"
+                                       FontSize="12" Foreground="#5C5344" TextWrapping="Wrap" />
+
+                            <Border Background="#E8F0E9" CornerRadius="6" Padding="8,6"
+                                    IsVisible="{Binding PurchaseSucceeded}">
+                                <TextBlock Text="{Binding PurchaseMessage}" FontSize="12"
+                                           Foreground="#2D5A3D" TextWrapping="Wrap" />
+                            </Border>
+
+                            <Border IsVisible="{Binding IsSalePlansEmpty}"
+                                    Padding="12,10" Background="#EAE5D9" CornerRadius="6">
+                                <TextBlock Text="暂无在售套餐，请稍后再试或联系管理员。"
+                                           FontSize="13" Foreground="#5C5344" />
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding SalePlans}"
+                                          IsVisible="{Binding !IsSalePlansEmpty}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#EAE5D9" BorderBrush="#D5CFBF" BorderThickness="1"
+                                                CornerRadius="10" Padding="16,14" Margin="0,0,0,10">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Spacing="6">
+                                                    <TextBlock Text="{Binding Name}" FontSize="16"
+                                                               FontWeight="Bold" Foreground="#2D3A2C" />
+                                                    <TextBlock Text="{Binding PagesDisplay}" FontSize="13"
+                                                               Foreground="#3D4A3E" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                                        <TextBlock Text="{Binding PriceDisplay}" FontSize="20"
+                                                                   FontWeight="Bold" Foreground="#2D5A3D" />
+                                                        <TextBlock Text="{Binding UnitPriceDisplay}" FontSize="12"
+                                                                   Foreground="#2D5A3D" VerticalAlignment="Bottom"
+                                                                   Margin="0,0,0,4" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding ValidityDisplay}" FontSize="12"
+                                                               Foreground="#8B8370" />
+                                                    <TextBlock Text="{Binding Description}" FontSize="12"
+                                                               Foreground="#5C5344" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Content="购 买"
+                                                        Tag="{Binding}"
+                                                        Click="OnPurchaseClick"
+                                                        Background="#9B722E" Foreground="White"
+                                                        FontWeight="Bold" Padding="18,10" CornerRadius="8"
+                                                        VerticalAlignment="Center"
+                                                        MinWidth="88" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Consumption records -->
+                    <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="消费记录" FontSize="18" FontWeight="Bold" Foreground="#2D3A2C" />
+
+                            <Border IsVisible="{Binding IsRecordsEmpty}"
+                                    Padding="20,16" HorizontalAlignment="Center">
+                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                    <TextBlock Text="暂无消费记录" FontSize="14" Foreground="#5C5344"
+                                               HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding Records}"
+                                          IsVisible="{Binding !IsRecordsEmpty}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#EAE5D9" CornerRadius="6"
+                                                Padding="10,8" Margin="0,0,0,4">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                                                <TextBlock Grid.Row="0" Grid.Column="0"
+                                                           Text="{Binding TypeLabel}" FontSize="13" FontWeight="Bold"
+                                                           Foreground="#2D3A2C" />
+                                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                                           Text="{Binding DisplayDescription}" FontSize="12"
+                                                           Foreground="#5C5344" Margin="12,0,8,0"
+                                                           TextWrapping="Wrap" />
+                                                <TextBlock Grid.Row="0" Grid.Column="2"
+                                                           Text="{Binding DisplayAmount, StringFormat='¥ {0:+0.00;-0.00}'}"
+                                                           FontSize="14" FontWeight="Bold" />
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                                           Text="{Binding AfterSnapshotText}" FontSize="11"
+                                                           Foreground="#4A7C59" Margin="0,4,0,0"
+                                                           IsVisible="{Binding HasAfterSnapshot}" />
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                                           Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                                                           FontSize="11" Foreground="#8B8370" Margin="0,2,0,0" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Content="加载更多..."
+                                    Command="{Binding LoadMoreRecordsCommand}"
+                                    Background="#D4E5D9" Foreground="#4A7C59"
+                                    FontSize="13" Padding="12,6" CornerRadius="6"
+                                    HorizontalAlignment="Center"
+                                    IsVisible="{Binding HasMoreRecords}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

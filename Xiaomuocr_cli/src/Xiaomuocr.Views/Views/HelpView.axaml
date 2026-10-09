@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.Views.Views.HelpView">
+    <ScrollViewer Padding="24,20">
+        <StackPanel Spacing="16" MaxWidth="720" HorizontalAlignment="Center">
+            <TextBlock Text="帮助" FontSize="22" FontWeight="Bold" Foreground="#2D3A2C" />
+            <TextBlock Text="扫描下方二维码，查看使用说明书或留言联系我们。"
+                       FontSize="13" Foreground="#5C5344" TextWrapping="Wrap" />
+
+            <Grid ColumnDefinitions="*,*" Margin="0,8,0,0">
+                <Border Grid.Column="0" Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                        Margin="0,0,10,0">
+                    <StackPanel Spacing="12" HorizontalAlignment="Center">
+                        <TextBlock Text="使用说明书" FontSize="16" FontWeight="SemiBold"
+                                   Foreground="#2D3A2C" HorizontalAlignment="Center" />
+                        <Border Background="White" CornerRadius="8" Padding="12"
+                                BorderBrush="#D4E5D9" BorderThickness="1"
+                                HorizontalAlignment="Center">
+                            <Image Width="200" Height="200" Stretch="Uniform"
+                                   Source="avares://Xiaomuocr.Views/Assets/manual-qr.png" />
+                        </Border>
+                        <TextBlock Text="扫码查看阅读器使用说明书"
+                                   FontSize="12" Foreground="#5C5344"
+                                   HorizontalAlignment="Center" TextWrapping="Wrap"
+                                   TextAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                        Margin="10,0,0,0">
+                    <StackPanel Spacing="12" HorizontalAlignment="Center">
+                        <TextBlock Text="联系我们" FontSize="16" FontWeight="SemiBold"
+                                   Foreground="#2D3A2C" HorizontalAlignment="Center" />
+                        <Border Background="White" CornerRadius="8" Padding="12"
+                                BorderBrush="#D4E5D9" BorderThickness="1"
+                                HorizontalAlignment="Center">
+                            <Image Width="200" Height="200" Stretch="Uniform"
+                                   Source="avares://Xiaomuocr.Views/Assets/contact-qr.jpg" />
+                        </Border>
+                        <TextBlock Text="扫码留言联系我们"
+                                   FontSize="12" Foreground="#5C5344"
+                                   HorizontalAlignment="Center" TextWrapping="Wrap"
+                                   TextAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

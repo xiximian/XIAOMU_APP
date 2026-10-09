@@ -1,0 +1,12 @@
+﻿using Xiaomuocr.Core.Services;
+var pdf = args[0];
+Console.WriteLine("open...");
+using var r = new PdfRenderService();
+var info = await r.OpenPdfAsync(pdf);
+Console.WriteLine($"opened {info.TotalPages}");
+Console.WriteLine("render display...");
+var bytes = await r.RenderPageForDisplayAsync(0, 1.0f, 0);
+Console.WriteLine($"ok {bytes.Length}");
+Console.WriteLine("render ocr...");
+var ocr = await r.RenderPageForOcrAsync(0);
+Console.WriteLine($"ocr ok {ocr.Width}x{ocr.Height}");

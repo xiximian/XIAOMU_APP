@@ -1,0 +1,60 @@
+前端客户端完成情况
+项目结构（40个源文件）
+
+Xiaomuocr_cli/src/
+├── Xiaomuocr.sln
+├── Xiaomuocr.Core/          # ViewModels + Services + Models
+│   ├── Models/ApiModels.cs          # 全部 DTO（Token, Balance, OCR, OSS, Version...）
+│   ├── ViewModels/                   # 7 个 ViewModel（MVVM）
+│   │   ├── ViewModelBase.cs          # ReactiveObject 基类
+│   │   ├── MainWindowViewModel.cs    # 导航 Shell
+│   │   ├── LoginViewModel.cs         # 登录
+│   │   ├── RegisterViewModel.cs      # 注册
+│   │   ├── AccountViewModel.cs       # 余额 + 充值 + 消费记录
+│   │   ├── OcrViewModel.cs           # OCR 全流程（选文件→OSS→提交→轮询→解析）
+│   │   ├── TaskHistoryViewModel.cs   # 识别历史列表
+│   │   └── SettingsViewModel.cs      # 设置 + 版本检查
+│   └── Services/                     # 8 个服务
+│       ├── ApiService.cs             # HTTP 管线（Token 刷新 + 重试 + 401处理）
+│       ├── AuthService.cs            # 登录/注册/Token刷新
+│       ├── BalanceService.cs         # 余额查询/充值/消费记录
+│       ├── OcrService.cs             # OCR 提交/轮询/搜索
+│       ├── OssService.cs             # OSS Token + 文件上传
+│       ├── VersionService.cs         # 版本检查
+│       ├── SettingsService.cs        # SQLite 键值存储
+│       ├── TokenStorage.cs           # SQLite Token 持久化
+│       └── NavigationService.cs      # 响应式导航
+├── Xiaomuocr.Views/         # 6 个页面视图（Avalonia XAML）
+│   └── Views/
+│       ├── LoginView         # 登录页
+│       ├── RegisterView      # 注册页
+│       ├── AccountView       # 账户页（余额卡片 + DataGrid 消费记录）
+│       ├── OcrView           # OCR 页（选文件 → 进度条 → 结果文本框）
+│       ├── TaskHistoryView   # 历史页（DataGrid + 状态筛选）
+│       └── SettingsView      # 设置页（服务器配置 + 连接测试 + 版本检查）
+└── Xiaomuocr.App/           # 应用壳
+    ├── MainWindow            # 侧边栏 + 内容区 + 状态栏
+    ├── App.axaml.cs          # DI 容器 + 启动 Token 恢复
+    └── Program.cs            # 入口
+已实现功能
+功能	状态
+注册/登录	✅
+Token 持久化 + 自动恢复登录	✅
+Token 401 自动刷新 + 重试	✅
+余额显示 + 模拟充值	✅
+消费记录 DataGrid	✅
+OCR：选文件 → 上传OSS → 提交 → 轮询 → 显示文本	✅
+OCR 结果解析（JSON → 纯文本）	✅
+OCR 结果复制/保存为TXT	✅
+识别历史列表 + 状态筛选	✅
+设置：服务器地址 + 连接测试	✅
+版本检查	✅
+退出登录	✅
+Serilog 日志	✅
+启动方式
+
+
+cd D:\Python\XIAOMU_OCR_App\Xiaomuocr_cli\src\Xiaomuocr.App
+dotnet run
+
+
