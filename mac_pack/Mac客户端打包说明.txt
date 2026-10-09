@@ -1,0 +1,243 @@
+================================================================================
+  小木史料阅读器 — macOS 客户端打包说明
+================================================================================
+  适用架构：Apple Silicon（M1/M2/M3/M4）→ RID = osx-arm64
+  版本号来源：Xiaomuocr_cli/src/Directory.Build.props（当前示例：2.1.11）
+  说明：Mac 包必须在 macOS 上构建并签名；不要在 Windows 上交叉编译后直接分发。
+================================================================================
+
+
+一、需要准备的东西
+--------------------------------------------------------------------------------
+
+【硬件 / 环境】
+  1. 一台 macOS 电脑（推荐 Apple Silicon / M 系列）
+     - 可借用、云 Mac 租用，或 GitHub Actions macos-latest
+     - 仅有 Windows PC 无法打出可在 Apple Silicon 上正常启动的包
+
+【软件】
+  2. 安装 .NET 9 SDK
+     下载：https://dotnet.microsoft.com/download/dotnet/9.0
+     安装后终端验证：
+       dotnet --version
+     （应显示 9.x）
+
+  3. 本仓库完整源码（含 Xiaomuocr_cli）
+     - 用 git clone / 拷贝整份工程到 Mac
+     - 确保能进入目录：Xiaomuocr_cli/src
+
+【打包前确认】
+  4. 版本号
+     - 打开：Xiaomuocr_cli/src/Directory.Build.props
+     - 修改 <Version>x.y.z</Version>，或在下方 publish 命令里用 -p:Version= 覆盖
+
+  5. 代码已具备 Mac 可编译条件（若尚未改完，打包会失败或 PDF 功能异常）
+     至少涉及：
+       - Xiaomuocr.App.csproj：非 Windows 时 OutputType 用 Exe（不要 WinExe）
+       - Xiaomuocr.PdfHost：DocnetRuntime 随 RID（osx-arm64）
+       - CopyPdfHost：按 RuntimeIdentifier 复制，Mac 无 .exe 后缀
+       - PdfRenderService：能找到 Xiaomuocr.PdfHost（无 .exe）
+       - UpdateService：Mac 上勿走 Windows 安装脚本；可先提示手动下载
+
+  6.（可选）生产服务器地址
+     - 若要打生产包，发布前把默认 API 地址改成生产环境（与 Windows 打包逻辑一致）
+     - 内部试用可先用当前默认配置
+
+【正式对外分发时另需】
+  7. Apple Developer Program（约 $99/年）
+  8. 钥匙串中的 Developer ID Application（.app/.dmg）
+     以及可选的 Developer ID Installer（.pkg）
+  9. App 专用密码，或 App Store Connect API Key
+  - 没有账号：仍可用 ad-hoc 签名做内部试用（首次需「右键 → 打开」）
+  - 对外分发：本机只导出证书/公证账号（mac_pack/notarize_macos.sh），打包在 GitHub 上做
+
+
+1b、缴费后：在这台 Mac 安装 Developer ID Application（对外分发必须）
+--------------------------------------------------------------------------------
+
+  缴费只开通账号。Xcode 自动拉下来的多为「Apple Development」，只能自己调试，
+  不能用来公证给别人装。对外分发要单独申请「Developer ID Application」。
+  CSR 必须在这台 Mac 上生成，私钥才留在本机钥匙串。
+
+  1. 打开「钥匙串访问」（Keychain Access）
+     - 菜单：钥匙串访问 → 证书助理 → 从证书颁发机构请求证书…
+     - 用户电子邮件：你的 Apple ID
+     - 常用名称：随意，例如 Xiaomu Developer ID
+     - 选取「存储到磁盘」，保存为 CertificateSigningRequest.certSigningRequest
+     - 不要选「让我指定密钥对信息」也可（默认 2048 RSA）
+
+  2. 浏览器打开 https://developer.apple.com/account/resources/certificates/list
+     - Certificates → + 
+     - 选 Software 里的「Developer ID Application」（给 .app / .dmg 签名）
+     - 上传刚才的 .certSigningRequest
+     - 下载 .cer，双击安装（进「登录」钥匙串）
+     - 若还要打 .pkg：再申请一张「Developer ID Installer」，同样用一份 CSR 或另做一份
+
+  3. 确认私钥成对（缺私钥就无法签名）
+     钥匙串访问 → 登录 → 证书 → 「Developer ID Application: 你的名字」
+     左侧应能展开看到「私钥」。终端检查：
+
+       security find-identity -v -p codesigning
+     有效行会显示 Developer ID Application: … (10位TeamID)，前面没有 CSSMERR。
+
+  4. 若提示证书不受信任：安装 Apple 中间证书
+     https://www.apple.com/certificateauthority/
+     下载 “Developer ID - G2” 相关中间证书，双击装入「系统」或「登录」。
+
+  5. App 专用密码（公证用，不是证书）
+     https://appleid.apple.com → 登录和安全 → App 专用密码 → 生成
+     填进 mac_pack/notarize.env 的 APPLE_APP_PASSWORD。
+
+  6. 然后才跑：./notarize_macos.sh certs / credentials / export
+
+
+二、推荐方式：使用 deploy/mac_deploy_client.py（自动检查环境）
+--------------------------------------------------------------------------------
+
+详细步骤见：deploy/mac_deploy_client使用说明书.txt
+
+  cd /你的路径/XIAOMU_OCR_App
+  python3 deploy/mac_deploy_client.py check
+  python3 deploy/mac_deploy_client.py build-pack --version 2.1.11
+
+下面「手动命令」仅在不用该脚本时参考。
+
+
+三、手动打包终端命令（在 Mac 上执行）
+--------------------------------------------------------------------------------
+
+# ---------- 0. 进入源码目录 ----------
+cd /你的路径/XIAOMU_OCR_App/Xiaomuocr_cli/src
+
+# ---------- 1. 确认环境 ----------
+dotnet --version
+uname -m
+# Apple Silicon 应显示 arm64
+
+# ---------- 2. 发布（self-contained）----------
+# 把 2.1.11 换成实际版本号
+VERSION=2.1.11
+
+dotnet publish Xiaomuocr.App/Xiaomuocr.App.csproj \
+  -c Release \
+  -r osx-arm64 \
+  --self-contained true \
+  -p:Version=$VERSION \
+  -p:PublishSingleFile=false \
+  -o ../../mac_pack/publish-osx \
+  -m:1
+
+# ---------- 3. ad-hoc 签名（Apple Silicon 必需，无需付费账号）----------
+codesign -s - --force --deep ../../mac_pack/publish-osx/Xiaomuocr.App
+
+# 若目录内还有 PdfHost 等可执行文件，一并签名（按实际文件名调整）：
+# codesign -s - --force --deep ../../mac_pack/publish-osx/Xiaomuocr.PdfHost
+
+# ---------- 4. 打成 zip 便于分发 ----------
+cd ../../mac_pack
+ditto -c -k --sequesterRsrc --keepParent publish-osx "小木史料-${VERSION}-mac-arm64.zip"
+
+# ---------- 5. 本机试跑（可选）----------
+# ./publish-osx/Xiaomuocr.App
+
+
+四、对外分发：仅在 MacBook 导出公证信息（打包放到 GitHub）
+--------------------------------------------------------------------------------
+
+  本机不组 .app / 不打 dmg。只需把 Developer ID 与公证账号导出，填进 GitHub Secrets，
+  以后在 GitHub macos runner 上 publish → codesign → notarytool → staple。
+
+  脚本：mac_pack/notarize_macos.sh
+  配置：cp notarize.env.example notarize.env（个人账号只填 Apple ID、App 专用密码）
+
+  cd /你的路径/XIAOMU_OCR_App/mac_pack
+  chmod +x notarize_macos.sh
+  # 若从 Windows 拷来：sed -i '' $'s/\r$//' notarize_macos.sh
+
+  ./notarize_macos.sh certs          # 列出证书
+  ./notarize_macos.sh credentials    # 验证公证账号
+  ./notarize_macos.sh export         # 写出 .p12 + Base64 + Secrets 清单
+
+  产物（不要 git add）：mac_pack/dist/github-macos-signing/
+    identities.txt
+    DeveloperID.p12 / DeveloperID.p12.base64
+    github_secrets.txt              ← 对照填 GitHub Secrets
+    entitlements.release.plist      ← 仓库里已有同名文件，CI 直接用仓库版
+
+  GitHub Secrets 至少：BUILD_CERTIFICATE_BASE64、BUILD_CERTIFICATE_PASSWORD、
+  SIGN_IDENTITY、TEAM_ID、APPLE_ID、APPLE_APP_PASSWORD（或 API Key 三项）。
+
+  公证 entitlements 必须用 entitlements.release.plist（无 get-task-allow）。
+
+  【Secrets 填完后】把含 workflow 的代码推到 GitHub 仓库 https://github.com/xiximian/XIAOMU_APP
+  （本机 Gitee 仍是 origin；GitHub 可加 remote 名 github）
+
+    git remote add github https://github.com/xiximian/XIAOMU_APP.git
+    git push github master:main
+
+  然后打开：https://github.com/xiximian/XIAOMU_APP/actions
+  → MacOS Release → Run workflow（选 osx-arm64）
+  成功后 Artifacts 可下载 .dmg / .zip；推送 tag v* 会挂到 Release。
+
+
+五、给试用者的安装说明（随包附带即可）
+--------------------------------------------------------------------------------
+
+  【重要】M1/M2/M3/M4 请只用 publish-osx-arm64（或 *-mac-arm64.zip）
+         不要用旧的 publish-osx /「publish-osx 2」混用目录。
+
+  1. 下载 zip，解压得到 publish-osx-arm64 文件夹
+  2. 双击「启动小木.command」（推荐）
+       - 若提示无法打开：右键 → 打开 → 仍要打开
+  3. 不要指望双击 Xiaomuocr.App 有安装向导——它不是 .app 包，
+     Finder 常静默拦截且无任何日志。
+  4. 或终端：
+       cd /解压路径/publish-osx-arm64
+       ./启动小木.command
+  5. 系统设置 → 隐私与安全性 → 仍要打开
+  6. 正式发布后走自动更新：deploy/mac_deploy_client.py 注册 platform=mac
+
+
+五、产物位置
+--------------------------------------------------------------------------------
+
+  mac_pack/publish-osx-arm64/              ← Apple Silicon 发布目录（推荐）
+  mac_pack/publish-osx-x64/                ← Intel Mac
+  mac_pack/小木史料-x.y.z-mac-arm64.zip    ← 分发用压缩包
+  （旧名 publish-osx 已废弃，请勿再依赖）
+
+
+六、常见问题
+--------------------------------------------------------------------------------
+
+  Q: 双击没反应、也没有任何日志？
+  A: 几乎都是 Gatekeeper 在进程序前杀掉进程。请用「启动小木.command」，
+     或运行: bash deploy/mac_fix_published.sh mac_pack/publish-osx-arm64
+     看 launch_console.log；若仍无 xiaomuocr_bootstrap.log，说明未进入 .NET。
+
+  Q: 在 Windows 上 dotnet publish -r osx-arm64 可以吗？
+  A: 可以交叉编译出文件，但 Apple Silicon 上未正确签名的程序常被系统直接杀掉。
+     签名工具 codesign 只能在 macOS 上运行，请在 Mac 上完成 publish + codesign。
+
+  Q: Intel Mac（x64）怎么打？
+  A: RID=osx-x64（发布工具选 both 或 osx-x64），产物在 publish-osx-x64。
+
+  Q: 和 Windows 的 Velopack（vpk pack）是什么关系？
+  A: Windows 继续用 deploy 工具 + vpk（platform=win）；Mac 用 zip + platform=mac。
+     后端按 (version, platform) 存两条，同版本号互不覆盖。
+
+
+七、建议检查清单（打完包后）
+--------------------------------------------------------------------------------
+
+  [ ] 双击「启动小木.command」能启动，版本号显示正确
+  [ ] 登录 / 连接服务器正常
+  [ ] 打开 PDF 预览正常（PdfHost）
+  [ ] OCR 上传 / 任务列表正常
+  [ ] 另一台 Mac 解压 zip 后「启动小木.command」可用
+  [ ] （正式包）启动后能检测到 mac 平台更新并自动安装
+
+================================================================================
+  文档位置：mac_pack/Mac客户端打包说明.txt
+  发布工具：deploy/mac_deploy_client.py
+================================================================================

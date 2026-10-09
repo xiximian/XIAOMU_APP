@@ -1,0 +1,103 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Xiaomuocr.Views.Views.SearchDialog"
+        Title="全文搜索" Width="860" Height="540"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="12">
+        <!-- 搜索栏 -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="False">
+            <StackPanel Orientation="Horizontal" Spacing="8" DockPanel.Dock="Left">
+                <TextBlock Text="关键词:" VerticalAlignment="Center" FontSize="13" />
+                <TextBox Name="KeywordBox" Width="320" FontSize="13"
+                         Watermark="支持简体/繁体双向搜索" />
+                <Button Name="SearchBtn" Content="搜索" Padding="12,6"
+                        Background="#4A7C59" Foreground="White" FontSize="13"
+                        CornerRadius="4" />
+                <Button Name="ExportBtn" Content="导出结果" Padding="12,6"
+                        Background="#2D5A3D" Foreground="White" FontSize="13"
+                        CornerRadius="4" IsEnabled="False"
+                        ToolTip.Tip="导出当前搜索结果为 TXT / CSV" />
+            </StackPanel>
+            <TextBlock Name="HintLabel" DockPanel.Dock="Right"
+                       Text="简繁互通" VerticalAlignment="Center"
+                       FontSize="11" Foreground="#8B8370" Margin="12,0,0,0" />
+        </DockPanel>
+
+        <!-- 统计条 -->
+        <Border Grid.Row="1" Background="#EAE5D9" CornerRadius="4"
+                Padding="10,6" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <TextBlock Name="StatsTotalLabel" Text="结果: —" FontSize="12"
+                           Foreground="#2D3A2C" FontWeight="SemiBold" />
+                <TextBlock Name="StatsHitLabel" Text="命中: —" FontSize="12"
+                           Foreground="#2D5A3D" />
+                <TextBlock Name="StatsPageLabel" Text="页数: —" FontSize="12"
+                           Foreground="#5C5344" />
+                <TextBlock Name="StatsKeywordLabel" Text="" FontSize="12"
+                           Foreground="#8B8370" />
+            </StackPanel>
+        </Border>
+
+        <!-- 表头 -->
+        <Border Grid.Row="2" Background="#D4E5D9" BorderBrush="#B8C5B0"
+                BorderThickness="0,0,0,1" Padding="6,4">
+            <Grid ColumnDefinitions="50,50,50,*">
+                <TextBlock Grid.Column="0" Text="页码" FontSize="12"
+                           Foreground="#4A5344" FontWeight="Bold" />
+                <TextBlock Grid.Column="1" Text="块号" FontSize="12"
+                           Foreground="#4A5344" FontWeight="Bold" />
+                <TextBlock Grid.Column="2" Text="次数" FontSize="12"
+                           Foreground="#4A5344" FontWeight="Bold" />
+                <TextBlock Grid.Column="3" Text="搜索结果" FontSize="12"
+                           Foreground="#4A5344" FontWeight="Bold" />
+            </Grid>
+        </Border>
+
+        <!-- 结果列表 -->
+        <ListBox Grid.Row="3" Name="ResultsList"
+                 SelectionMode="Single">
+            <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Padding="6,4" BorderBrush="#D5CFBF" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="50,50,50,*">
+                            <TextBlock Grid.Column="0" Text="{Binding PageNumber}"
+                                       FontSize="12" Foreground="#5C5344"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding BlockId}"
+                                       FontSize="12" Foreground="#5C5344"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding MatchCount}"
+                                       FontSize="12" Foreground="#2D5A3D"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="3" Text="{Binding Snippet}"
+                                       FontSize="13" Foreground="#2D3A2C"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="NoWrap"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- 底部按钮 -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8"
+                    HorizontalAlignment="Right" Margin="0,8,0,0">
+            <TextBlock Name="StatusLabel" VerticalAlignment="Center"
+                       FontSize="12" Foreground="#5C5344" />
+            <Button Content="跳转到选中项" Padding="10,6"
+                    Background="#2D5A3D" Foreground="White" FontSize="12"
+                    CornerRadius="4" Name="JumpBtn" />
+            <Button Content="关闭" Padding="10,6"
+                    Background="#D4E5D9" FontSize="12"
+                    CornerRadius="4" Name="CloseBtn" />
+        </StackPanel>
+    </Grid>
+</Window>

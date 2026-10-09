@@ -1,0 +1,269 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:Xiaomuocr.Views.Converters"
+             x:Class="Xiaomuocr.Views.Views.PdfViewerView"
+             Name="PdfViewerRoot">
+
+    <UserControl.Resources>
+        <converters:BoolToHighlightConverter x:Key="HighlightBg" />
+        <converters:OcrPageNavBgConverter x:Key="OcrPageNavBg" />
+        <converters:BoolToBorderThicknessConverter x:Key="CurrentPageBorder" />
+        <converters:StringToHighlightBrushConverter x:Key="StringToHighlightBrush" />
+    </UserControl.Resources>
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <!-- ===== 顶部：翻页 / 缩放 ===== -->
+        <Border Grid.Row="0" Background="White" Padding="8,6" Margin="0,0,0,2">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Button Content="« 上一页" Command="{Binding PrevPageCommand}"
+                            Padding="8,4" FontSize="12" Background="#F1F5F9"
+                            CornerRadius="3" />
+                    <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="#1E293B"
+                               Margin="8,0" FontWeight="Bold"
+                               Text="{Binding CurrentPageDisplay}" />
+                    <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="#64748B" Text=" / " />
+                    <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="#1E293B" FontWeight="Bold"
+                               Text="{Binding TotalPages}" />
+                    <Button Content="下一页 »" Command="{Binding NextPageCommand}"
+                            Padding="8,4" FontSize="12" Background="#F1F5F9"
+                            CornerRadius="3" Margin="8,0,0,0" />
+                    <Button Content="放大 +" Command="{Binding ZoomInCommand}"
+                            Padding="6,4" FontSize="11" Background="#F1F5F9" CornerRadius="3" Margin="12,0,0,0" />
+                    <Button Content="缩小 -" Command="{Binding ZoomOutCommand}"
+                            Padding="6,4" FontSize="11" Background="#F1F5F9" CornerRadius="3" />
+                    <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#64748B"
+                               Text="{Binding Zoom, StringFormat='{}{0:P0}'}" Margin="4,0" />
+                    <Button Content="↺" Command="{Binding RotateLeftCommand}"
+                            Padding="6,4" FontSize="13" Background="#F1F5F9" CornerRadius="3" Margin="8,0,0,0" />
+                    <Button Content="↻" Command="{Binding RotateRightCommand}"
+                            Padding="6,4" FontSize="13" Background="#F1F5F9" CornerRadius="3" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                    <Button Content="{Binding ConvertBtnLabel}"
+                            Command="{Binding ToggleConvertCommand}"
+                            Padding="8,4" FontSize="12" Background="#FEF3C7"
+                            Foreground="#D97706" CornerRadius="3" />
+                    <Button Name="HighlightBtn" Content="高亮"
+                            Focusable="False"
+                            Padding="8,4" FontSize="12" Background="#FBBF24"
+                            Foreground="#78350F" CornerRadius="3"
+                            Click="OnHighlightClick"
+                            ToolTip.Tip="选中文本框内文字后点击，仅高亮选中部分" />
+                    <Button Content="清除高亮" Command="{Binding ClearHighlightsCommand}"
+                            Padding="8,4" FontSize="12" Background="#FEF2F2"
+                            Foreground="#DC2626" CornerRadius="3"
+                            ToolTip.Tip="清除当前页所有高亮" />
+                    <Button Content="搜索" Command="{Binding SearchCommand}"
+                            Padding="8,4" FontSize="12" Background="#F1F5F9"
+                            Foreground="#475569" CornerRadius="3"
+                            ToolTip.Tip="全文搜索 OCR 识别内容" />
+                    <Button Content="高亮列表" Command="{Binding HighlightListCommand}"
+                            Padding="8,4" FontSize="12" Background="#F1F5F9"
+                            Foreground="#475569" CornerRadius="3"
+                            ToolTip.Tip="列出全文所有高亮标记，双击跳转" />
+                    <Button Content="导出全文" Command="{Binding ExportCommand}"
+                            Padding="8,4" FontSize="12" Background="#F1F5F9"
+                            Foreground="#475569" CornerRadius="3"
+                            ToolTip.Tip="导出当前文献为 TXT 文件" />
+                    <Button Content="保存修改" Command="{Binding SaveTextCommand}"
+                            Padding="8,4" FontSize="12" Background="#3B82F6" Foreground="White"
+                            CornerRadius="3" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== OCR 工具条：单页 / 全文 / 页码范围 ===== -->
+        <Border Grid.Row="1" Background="#F8FAFC" Padding="8,6" Margin="0,0,0,4"
+                BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="OCR" VerticalAlignment="Center" FontSize="12" FontWeight="Bold"
+                               Foreground="#047857" Margin="0,0,4,0" />
+                    <Button Content="单页识别" Command="{Binding OcrCurrentPageCommand}"
+                            Padding="10,4" FontSize="12" Background="#059669" Foreground="White"
+                            CornerRadius="3" ToolTip.Tip="识别当前页并覆盖已有结果" />
+                    <Button Content="全文识别" Command="{Binding OcrAllPagesCommand}"
+                            Padding="10,4" FontSize="12" Background="#0D9488" Foreground="White"
+                            CornerRadius="3" ToolTip.Tip="识别全书未完成页面（已识别页会跳过）" />
+                    <Border Background="#E2E8F0" Width="1" Margin="6,2" />
+                    <TextBlock Text="页码" VerticalAlignment="Center" FontSize="12" Foreground="#475569" />
+                    <TextBox Text="{Binding RangeFrom}" Width="44" Padding="4,2" FontSize="12"
+                             Watermark="起" VerticalContentAlignment="Center"
+                             ToolTip.Tip="起始页（从 1 开始）" />
+                    <TextBlock Text="—" VerticalAlignment="Center" FontSize="12" Foreground="#94A3B8" />
+                    <TextBox Text="{Binding RangeTo}" Width="44" Padding="4,2" FontSize="12"
+                             Watermark="止" VerticalContentAlignment="Center"
+                             ToolTip.Tip="结束页（含）" />
+                    <Button Content="范围识别" Command="{Binding OcrRangeCommand}"
+                            Padding="10,4" FontSize="12" Background="#2563EB" Foreground="White"
+                            CornerRadius="3" ToolTip.Tip="按页码范围识别（已识别页会跳过）" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11"
+                           Foreground="#B45309" MaxWidth="320" TextWrapping="NoWrap"
+                           Text="{Binding StatusMessage}"
+                           IsVisible="{Binding IsOcrRunning}" />
+            </Grid>
+        </Border>
+
+        <!-- ===== 中部：页码栏 + PDF 画布 + 文本面板 ===== -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,4,6*,4,4*">
+            <!-- 左侧页码导航 -->
+            <Border Grid.Column="0" Width="52" Background="#F8FAFC"
+                    BorderBrush="#E2E8F0" BorderThickness="0,0,1,0">
+                <ListBox Name="PageNavList"
+                         ItemsSource="{Binding PageNavItems}"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="4,6" Margin="3,1"
+                                    CornerRadius="3" Cursor="Hand"
+                                    Background="{Binding HasOcr, Converter={StaticResource OcrPageNavBg}}"
+                                    BorderBrush="#2563EB"
+                                    BorderThickness="{Binding IsCurrent, Converter={StaticResource CurrentPageBorder}}"
+                                    Tag="{Binding PageIndex}"
+                                    Tapped="OnPageNavTapped">
+                                <TextBlock Text="{Binding PageNumber}"
+                                           HorizontalAlignment="Center"
+                                           FontSize="12"
+                                           Foreground="#334155" />
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="4" Background="#CBD5E1"
+                          HorizontalAlignment="Stretch" />
+
+            <!-- PDF : 文本 = 6:4 -->
+            <Border Grid.Column="2" Background="#E2E8F0" ClipToBounds="True">
+                <Panel>
+                    <ScrollViewer Name="PdfScrollViewer"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto">
+                        <Grid Name="PdfCanvas">
+                            <Image Name="PdfImage" Stretch="None" />
+                            <Canvas Name="BboxCanvas" Background="Transparent"
+                                    IsHitTestVisible="True" />
+                        </Grid>
+                    </ScrollViewer>
+
+                    <Border IsVisible="{Binding DisplayImage, Converter={x:Static ObjectConverters.IsNull}}"
+                            Background="White" Padding="40" HorizontalAlignment="Center"
+                            VerticalAlignment="Center" CornerRadius="8">
+                        <StackPanel Spacing="6" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding StatusMessage}" FontSize="14" Foreground="#334155"
+                                       HorizontalAlignment="Center" TextWrapping="Wrap"
+                                       IsVisible="{Binding HasStatus}" />
+                            <TextBlock Text="{Binding ErrorMessage}" FontSize="14" Foreground="#DC2626"
+                                       HorizontalAlignment="Center" TextWrapping="Wrap"
+                                       IsVisible="{Binding HasError}" />
+                            <TextBlock Text="PDF 加载中..." FontSize="14" Foreground="#64748B"
+                                       HorizontalAlignment="Center" IsVisible="{Binding IsBusy}" />
+                        </StackPanel>
+                    </Border>
+                </Panel>
+            </Border>
+
+            <GridSplitter Grid.Column="3" Width="4" Background="#CBD5E1"
+                          HorizontalAlignment="Stretch" />
+
+            <!-- ===== 右侧：文本块编辑列表 ===== -->
+            <Border Grid.Column="4" Background="White" Padding="8,8">
+                <Grid RowDefinitions="Auto,*">
+                    <StackPanel Margin="0,0,0,6" Spacing="2">
+                        <TextBlock FontSize="13" FontWeight="Bold" Foreground="#1E293B"
+                                   Text="{Binding Blocks.Count, StringFormat='识别文本（{0} 块，可编辑）'}" />
+                        <TextBlock FontSize="11" Foreground="#64748B"
+                                   Text="修改后点「保存修改」写回本页 OCR 结果" />
+                    </StackPanel>
+
+                    <ListBox Grid.Row="1" Name="TextBlocksList"
+                             ItemsSource="{Binding Blocks}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             Background="Transparent" BorderThickness="0">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListBox.Styles>
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{Binding EffectiveHighlightColor, Converter={StaticResource StringToHighlightBrush}}"
+                                        CornerRadius="4" Padding="6,4" Margin="0,0,0,4"
+                                        Tag="{Binding Index}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock FontSize="11" FontWeight="Bold" Foreground="#0066CC"
+                                                   Text="{Binding Index, StringFormat='[{0}]'}" />
+                                        <!-- 查看模式：Text/Inlines 由代码控制 -->
+                                        <TextBlock x:Name="PART_HighlightTextBlock"
+                                                   FontSize="13"
+                                                   FontFamily="Microsoft YaHei"
+                                                   TextWrapping="Wrap"
+                                                   MinHeight="48"
+                                                   Padding="6,4"
+                                                   Tag="{Binding Index}"
+                                                   Tapped="OnHighlightTextBlockTapped"
+                                                   DoubleTapped="OnHighlightTextBlockDoubleTapped"
+                                                   IsVisible="{Binding IsViewing}" />
+                                        <!-- 编辑模式：TextBox -->
+                                        <TextBox Text="{Binding EditorText, Mode=TwoWay}"
+                                                 FontSize="13"
+                                                 FontFamily="Microsoft YaHei"
+                                                 TextWrapping="Wrap"
+                                                 AcceptsReturn="True"
+                                                 MinHeight="48"
+                                                 MaxHeight="220"
+                                                 BorderBrush="#CBD5E1"
+                                                 BorderThickness="1"
+                                                 CornerRadius="3"
+                                                 Padding="6,4"
+                                                 Tag="{Binding Index}"
+                                                 GotFocus="OnTextBlockEditorGotFocus"
+                                                 KeyDown="OnTextBlockEditorKeyDown"
+                                                 IsVisible="{Binding IsEditing}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Background="#F1F5F9" Padding="6,4" Margin="0,4,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <TextBlock Text="{Binding DocumentName}" FontSize="11" Foreground="#64748B" />
+                <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#059669"
+                           IsVisible="{Binding HasStatus}" />
+                <TextBlock Text="{Binding ErrorMessage}" FontSize="11" Foreground="#DC2626"
+                           IsVisible="{Binding HasError}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,10 @@
+<Project>
+  <!-- 统一版本号管理：只在此处一处修改，或通过 dotnet build -p:Version=1.0.x 覆盖 -->
+  <PropertyGroup>
+    <Version>2.2.22</Version>
+    <Product>小木史料阅读器</Product>
+    <AssemblyTitle>小木史料阅读器</AssemblyTitle>
+    <!-- 以下由 $(Version) 自动派生，无需单独设置 -->
+    <!-- AssemblyVersion / FileVersion / InformationalVersion 均由 .NET SDK 自动生成 -->
+  </PropertyGroup>
+</Project>

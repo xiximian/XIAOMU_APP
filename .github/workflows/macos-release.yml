@@ -1,0 +1,234 @@
+# 在 GitHub Actions macos 上：dotnet publish → Developer ID 签名 → notarytool 公证 → staple → .dmg
+#
+# 触发：Actions → MacOS Release → Run workflow
+# 或推送 tag：v2.2.19
+#
+# 必填 Secrets：
+#   BUILD_CERTIFICATE_BASE64 / BUILD_CERTIFICATE_PASSWORD
+#   SIGN_IDENTITY / TEAM_ID / APPLE_ID / APPLE_APP_PASSWORD
+# 可选：BUNDLE_ID（默认 cn.xiaomu.reader）、APP_NAME（默认 XiaomuReader）
+
+name: MacOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（留空则读 Directory.Build.props）"
+        required: false
+        default: ""
+      rid:
+        description: "osx-arm64 或 osx-x64"
+        required: false
+        default: "osx-arm64"
+        type: choice
+        options:
+          - osx-arm64
+          - osx-x64
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-notarize:
+    runs-on: macos-14
+    env:
+      RID: ${{ github.event.inputs.rid || 'osx-arm64' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          V="${{ github.event.inputs.version }}"
+          if [[ -z "${V:-}" ]]; then
+            if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+              V="${GITHUB_REF_NAME#v}"
+            else
+              V="$(grep -oE '<Version>[^<]+' Xiaomuocr_cli/src/Directory.Build.props | head -1 | sed 's/<Version>//')"
+            fi
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$V RID=$RID"
+
+      - name: Import Developer ID certificate
+        shell: bash
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          BUILD_CERTIFICATE_PASSWORD: ${{ secrets.BUILD_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          : "${BUILD_CERTIFICATE_BASE64:?missing BUILD_CERTIFICATE_BASE64}"
+          : "${BUILD_CERTIFICATE_PASSWORD:?missing BUILD_CERTIFICATE_PASSWORD}"
+          CERT_PATH="$RUNNER_TEMP/developer_id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          ls -la "$CERT_PATH"
+          # 新建临时钥匙串，并设为默认（后续步骤要继续用）
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db login.keychain 2>/dev/null \
+            || security list-keychains -d user -s "$KEYCHAIN_PATH"
+          # 勿加 -t cert：会只导入公钥证书、丢掉私钥，codesign 就会报 item not found
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$BUILD_CERTIFICATE_PASSWORD" \
+            -f pkcs12 \
+            -A \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/productbuild
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "======== codesigning identities ========"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning
+          if ! security find-identity -v -p codesigning | grep -F 'Developer ID Application:' >/dev/null; then
+            echo "❌ 导入后没有 Developer ID Application（0 valid identities）。"
+            echo "常见原因：GitHub Secret BUILD_CERTIFICATE_BASE64 里的 .p12 不是 Developer ID，"
+            echo "而是本机其它证书（例如 CN=localhost）。请在 Mac「钥匙串访问」→「我的证书」"
+            echo "里对「Developer ID Application: …」右键导出 .p12，重新 base64 后更新 Secret。"
+            echo "校验命令（本机）：openssl pkcs12 -in DeveloperID.p12 -nokeys -clcerts -legacy | openssl x509 -noout -subject"
+            echo "应看到 subject 含 Developer ID Application，而不是 CN=localhost。"
+            exit 1
+          fi
+          # 供后续步骤解锁
+          {
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
+            echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Publish
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          OUT="mac_pack/publish-$RID"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+          dotnet publish Xiaomuocr_cli/src/Xiaomuocr.App/Xiaomuocr.App.csproj \
+            -c Release \
+            -r "$RID" \
+            --self-contained true \
+            -p:Version="$VERSION" \
+            -p:PublishSingleFile=false \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -o "$OUT" \
+            -m:1
+          test -f "$OUT/Xiaomuocr.App"
+          chmod +x "$OUT/Xiaomuocr.App"
+          [[ -f "$OUT/Xiaomuocr.PdfHost" ]] && chmod +x "$OUT/Xiaomuocr.PdfHost" || true
+
+      - name: Sign, notarize, staple, DMG
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          APP_NAME: ${{ secrets.APP_NAME }}
+          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          PUBLISH_DIR: mac_pack/publish-${{ env.RID }}
+          OUT_DIR: mac_pack/dist/ci-${{ env.RID }}
+        run: |
+          set -euo pipefail
+          : "${SIGN_IDENTITY:?missing SIGN_IDENTITY}"
+          : "${TEAM_ID:?missing TEAM_ID}"
+          : "${APPLE_ID:?missing APPLE_ID}"
+          : "${APPLE_APP_PASSWORD:?missing APPLE_APP_PASSWORD}"
+          # 去掉 Secret 首尾空格/引号
+          SIGN_IDENTITY="$(printf '%s' "$SIGN_IDENTITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')"
+          export SIGN_IDENTITY
+          export APP_NAME="${APP_NAME:-XiaomuReader}"
+          export BUNDLE_ID="${BUNDLE_ID:-cn.xiaomu.reader}"
+          export RID="${RID:-osx-arm64}"
+          export PUBLISH_DIR="${PUBLISH_DIR:-mac_pack/publish-$RID}"
+          export OUT_DIR="${OUT_DIR:-mac_pack/dist/ci-$RID}"
+          # 重新解锁临时钥匙串（步骤之间可能上锁）
+          if [[ -n "${KEYCHAIN_PATH:-}" && -n "${KEYCHAIN_PASSWORD:-}" ]]; then
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security default-keychain -s "$KEYCHAIN_PATH"
+            security list-keychains -d user -s "$KEYCHAIN_PATH"
+          fi
+          echo "SIGN_IDENTITY=[$SIGN_IDENTITY]"
+          echo "PUBLISH_DIR=[$PUBLISH_DIR] RID=[$RID]"
+          security find-identity -v -p codesigning
+          if ! security find-identity -v -p codesigning | grep -F "$SIGN_IDENTITY" >/dev/null; then
+            echo "⚠️ Secret SIGN_IDENTITY 与钥匙串不一致，改用钥匙串中的 Developer ID Application"
+            DETECTED="$(security find-identity -v -p codesigning | grep -F 'Developer ID Application:' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+            [[ -n "$DETECTED" ]] || { echo "❌ 钥匙串里没有可用的 Developer ID Application（检查 p12 是否含私钥）"; exit 1; }
+            export SIGN_IDENTITY="$DETECTED"
+            echo "SIGN_IDENTITY(auto)=[$SIGN_IDENTITY]"
+          fi
+          python3 -c "from pathlib import Path; p=Path('mac_pack/ci_pack_notarize.sh'); p.write_bytes(p.read_bytes().replace(b'\r\n',b'\n').replace(b'\r',b'\n'))"
+          chmod +x mac_pack/ci_pack_notarize.sh
+          ./mac_pack/ci_pack_notarize.sh
+
+      - name: Stage artifact files (clear names)
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          SRC="mac_pack/dist/ci-$RID"
+          DST="mac_pack/dist/artifact-$RID"
+          rm -rf "$DST"
+          mkdir -p "$DST"
+          echo "==== dist listing ===="
+          ls -lah "$SRC"
+          # 更新用 zip（勿与 GitHub「下载 Artifact」外层 zip 混淆）
+          shopt -s nullglob
+          zips=("$SRC"/*.zip)
+          dmgs=("$SRC"/*.dmg)
+          [[ ${#zips[@]} -ge 1 ]] || { echo "❌ 未找到 .zip"; exit 1; }
+          [[ ${#dmgs[@]} -ge 1 ]] || { echo "❌ 未找到 .dmg"; exit 1; }
+          cp -f "${zips[0]}" "$DST/XiaomuReader-${VERSION}-${RID}-update.zip"
+          cp -f "${dmgs[0]}" "$DST/XiaomuReader-${VERSION}-${RID}-install.dmg"
+          # 公证记录
+          for f in notarization_id.txt notarization.json notarization_dmg_id.txt notarization_dmg.json; do
+            [[ -f "$SRC/$f" ]] && cp -f "$SRC/$f" "$DST/" || true
+          done
+          echo "==== artifact staging ===="
+          ls -lah "$DST"
+          # 给下一步 Release 用
+          echo "STAGED_ZIP=$DST/XiaomuReader-${VERSION}-${RID}-update.zip" >> "$GITHUB_ENV"
+          echo "STAGED_DMG=$DST/XiaomuReader-${VERSION}-${RID}-install.dmg" >> "$GITHUB_ENV"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          # 下载后得到一个外层 zip，内含 update.zip + install.dmg
+          name: XiaomuReader-${{ steps.ver.outputs.version }}-${{ env.RID }}-mac
+          path: mac_pack/dist/artifact-${{ env.RID }}/
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.STAGED_ZIP }}
+            ${{ env.STAGED_DMG }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
