@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:Xiaomuocr.Views.Converters"
+             x:Class="Xiaomuocr.Views.Views.TaskHistoryView">
+
+    <UserControl.Resources>
+        <converters:StatusToColorConverter x:Key="StatusColor" />
+        <converters:StatusToBgConverter x:Key="StatusBg" />
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="24,20">
+        <!-- Row 0: Header -->
+        <StackPanel Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="识别历史" FontSize="20" FontWeight="Bold" Foreground="#2D3A2C" />
+                <Button Content="刷新" Command="{Binding LoadTasksCommand}"
+                        Background="#4A7C59" Foreground="White" Padding="10,4" CornerRadius="4" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="全部" Command="{Binding FilterCommand}" CommandParameter="{x:Null}"
+                        Background="#D4E5D9" Padding="10,4" CornerRadius="4" />
+                <Button Content="处理中" Command="{Binding FilterCommand}" CommandParameter="processing"
+                        Background="#F2E6C8" Foreground="#9B722E" Padding="10,4" CornerRadius="4" />
+                <Button Content="已完成" Command="{Binding FilterCommand}" CommandParameter="completed"
+                        Background="#D4E5D9" Foreground="#2D5A3D" Padding="10,4" CornerRadius="4" />
+                <Button Content="失败" Command="{Binding FilterCommand}" CommandParameter="failed"
+                        Background="#F5E0DC" Foreground="#B8443C" Padding="10,4" CornerRadius="4" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Row 1: Error message -->
+        <Border Grid.Row="1" Background="#F5E0DC" CornerRadius="6" Padding="8,6" Margin="0,6,0,0"
+                IsVisible="{Binding HasError}">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C" FontSize="12" />
+        </Border>
+
+        <!-- Row 2: Status / diagnostic message -->
+        <Border Grid.Row="2" Background="#F2E6C8" CornerRadius="6" Padding="8,6" Margin="0,6,0,0"
+                IsVisible="{Binding HasStatus}">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#5C5344" FontSize="12" />
+        </Border>
+
+        <!-- Row 3: Task list or empty state -->
+        <Panel Grid.Row="3">
+            <!-- Empty state -->
+            <Border IsVisible="{Binding IsEmpty}" Background="#FDFBF7" CornerRadius="10"
+                    Padding="40,30" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel HorizontalAlignment="Center" Spacing="8">
+                    <TextBlock Text="📋" FontSize="48" HorizontalAlignment="Center" />
+                    <TextBlock Text="暂无识别记录" FontSize="16" Foreground="#5C5344"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="在阅读器中完成识别后，记录将显示在这里"
+                               FontSize="12" Foreground="#8B8370" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- Task list -->
+            <ScrollViewer IsVisible="{Binding !IsEmpty}">
+                <ItemsControl ItemsSource="{Binding Tasks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#FDFBF7" CornerRadius="8" Padding="12,10"
+                                    Margin="0,0,0,6">
+                                <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+                                    <!-- 文献名 + 页码 -->
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="{Binding DocumentDisplay}" FontSize="14"
+                                                   FontWeight="SemiBold" Foreground="#2D3A2C"
+                                                   TextWrapping="Wrap" MaxWidth="420" />
+                                        <TextBlock Text="{Binding PageDisplay}" FontSize="13"
+                                                   Foreground="#5C5344" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <!-- Status badge -->
+                                    <Border Grid.Row="0" Grid.Column="1"
+                                            Background="{Binding Status, Converter={StaticResource StatusBg}}"
+                                            CornerRadius="4" Padding="6,2" Margin="12,0,0,0"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Status}"
+                                                   Foreground="{Binding Status, Converter={StaticResource StatusColor}}"
+                                                   FontSize="11" FontWeight="Bold" />
+                                    </Border>
+                                    <!-- Cost -->
+                                    <TextBlock Grid.Row="0" Grid.Column="2"
+                                               Text="{Binding Cost, StringFormat='¥{0:F2}'}"
+                                               FontSize="12" Margin="12,0,0,0"
+                                               VerticalAlignment="Center" />
+
+                                    <!-- 任务 ID -->
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                               Text="{Binding TaskUuid, StringFormat='任务ID: {0}'}"
+                                               FontSize="11" Foreground="#4A5344"
+                                               FontFamily="Consolas, Cascadia Mono, Courier New"
+                                               Margin="0,6,0,0" TextWrapping="Wrap" />
+
+                                    <!-- 错误信息（失败时） -->
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                               Text="{Binding ErrorMessage}"
+                                               FontSize="11" Foreground="#B8443C"
+                                               Margin="0,4,0,0" TextWrapping="Wrap"
+                                               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                                    <!-- 时间 -->
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
+                                               Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                                               FontSize="11" Foreground="#8B8370" Margin="0,4,0,0" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Panel>
+
+        <!-- Row 4: Pagination -->
+        <Border Grid.Row="4" Background="#FDFBF7" CornerRadius="8" Padding="12,10"
+                Margin="0,10,0,0" IsVisible="{Binding !IsEmpty}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+                <Button Content="« 上一页" Command="{Binding PrevPageCommand}"
+                        Background="#D4E5D9" Foreground="#3D4A3E" Padding="12,6"
+                        CornerRadius="4" />
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Text="第" FontSize="13" Foreground="#5C5344" />
+                    <TextBlock Text="{Binding Page}" FontSize="13" Foreground="#2D3A2C" FontWeight="Bold" />
+                    <TextBlock Text="/" FontSize="13" Foreground="#5C5344" />
+                    <TextBlock Text="{Binding TotalPages}" FontSize="13" Foreground="#2D3A2C" FontWeight="Bold" />
+                    <TextBlock Text="页" FontSize="13" Foreground="#5C5344" />
+                </StackPanel>
+                <Button Content="下一页 »" Command="{Binding NextPageCommand}"
+                        Background="#D4E5D9" Foreground="#3D4A3E" Padding="12,6"
+                        CornerRadius="4" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

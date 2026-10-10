@@ -1,0 +1,65 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.App.App"
+             RequestedThemeVariant="Light">
+    <!--
+      必须固定 Light：界面大量硬编码浅色（#FDFBF7 / #2D3A2C）。
+      Default 会跟随 macOS 深色模式，Fluent 控件 hover/focus 刷成白底白字或「看不见」的文本框。
+    -->
+    <Application.Resources>
+        <SolidColorBrush x:Key="TextControlBackground">#FDFBF7</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlBackgroundPointerOver">#FFFFFF</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlBackgroundFocused">#FFFFFF</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlForeground">#2D3A2C</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlForegroundPointerOver">#2D3A2C</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlForegroundFocused">#2D3A2C</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlBorderBrush">#B8C5B0</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver">#4A7C59</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlBorderBrushFocused">#4A7C59</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlPlaceholderForeground">#8B8370</SolidColorBrush>
+        <SolidColorBrush x:Key="TextControlSelectionHighlightColor">#804A7C59</SolidColorBrush>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <Style Selector="Window">
+            <Setter Property="Background" Value="#D4E5D9" />
+            <Setter Property="Foreground" Value="#2D3A2C" />
+        </Style>
+
+        <!-- TextBox：强制浅色底 + 深色字（含未聚焦，避免 Mac 深色主题下「看不见」） -->
+        <Style Selector="TextBox /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#FDFBF7" />
+            <Setter Property="BorderBrush" Value="#B8C5B0" />
+        </Style>
+        <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#4A7C59" />
+        </Style>
+        <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#4A7C59" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="Foreground" Value="#2D3A2C" />
+            <Setter Property="CaretBrush" Value="#2D3A2C" />
+            <Setter Property="SelectionBrush" Value="#804A7C59" />
+        </Style>
+
+        <!-- Button：hover/pressed 保留作者设置的 Background/Foreground，避免刷成系统白 -->
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding $parent[Button].Background}" />
+            <Setter Property="TextElement.Foreground" Value="{Binding $parent[Button].Foreground}" />
+            <Setter Property="Opacity" Value="0.90" />
+        </Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{Binding $parent[Button].Background}" />
+            <Setter Property="TextElement.Foreground" Value="{Binding $parent[Button].Foreground}" />
+            <Setter Property="Opacity" Value="0.80" />
+        </Style>
+        <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+    </Application.Styles>
+</Application>

@@ -1,0 +1,94 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Xiaomuocr.Views.Views.PaymentWindow"
+        Title="扫码支付"
+        Width="400" Height="520"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#EAE5D9">
+    <Border Padding="24,20">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+            <!-- 标题 -->
+            <TextBlock x:Name="TitleText"
+                       Text="扫码支付"
+                       FontSize="20" FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       Foreground="#2D3A2C" />
+
+            <!-- 金额 -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal"
+                        HorizontalAlignment="Center" Margin="0,12,0,0">
+                <TextBlock Text="支付金额："
+                           FontSize="16" Foreground="#4A5344"
+                           VerticalAlignment="Center" />
+                <TextBlock x:Name="AmountText"
+                           Text="¥0.00"
+                           FontSize="24" FontWeight="Bold"
+                           Foreground="#B8443C"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- 二维码 -->
+            <Border Grid.Row="2"
+                    Margin="0,16,0,0"
+                    Background="#FDFBF7"
+                    CornerRadius="8"
+                    Padding="12"
+                    HorizontalAlignment="Center">
+                <Image x:Name="QrCodeImage"
+                       Width="220" Height="220"
+                       Stretch="Uniform" />
+            </Border>
+
+            <!-- 提示文字 -->
+            <TextBlock x:Name="StatusText"
+                       Grid.Row="3"
+                       Margin="0,12,0,0"
+                       FontSize="13"
+                       Foreground="#5C5344"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="请扫描二维码完成支付" />
+
+            <!-- 订单号 -->
+            <TextBlock x:Name="OrderNoText"
+                       Grid.Row="4"
+                       Margin="0,4,0,0"
+                       FontSize="11"
+                       Foreground="#8B8370"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap" />
+
+            <!-- 轮询状态 -->
+            <TextBlock x:Name="PollingText"
+                       Grid.Row="5"
+                       Margin="0,8,0,0"
+                       FontSize="12"
+                       Foreground="#4A7C59"
+                       HorizontalAlignment="Center"
+                       Text="正在等待支付结果..." />
+
+            <!-- 按钮 -->
+            <StackPanel Grid.Row="6"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Margin="0,16,0,0">
+                <Button x:Name="RefreshBtn"
+                        Content="我已完成支付"
+                        Width="140" Height="36"
+                        FontSize="13"
+                        Background="#4A7C59" Foreground="White"
+                        CornerRadius="6"
+                        HorizontalAlignment="Center" />
+                <Button x:Name="CloseBtn"
+                        Content="取消"
+                        Width="80" Height="36"
+                        Margin="12,0,0,0"
+                        FontSize="13"
+                        Background="#8B8370" Foreground="White"
+                        CornerRadius="6"
+                        HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

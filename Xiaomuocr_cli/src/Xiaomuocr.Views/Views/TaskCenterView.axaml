@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Xiaomuocr.Core.ViewModels;assembly=Xiaomuocr.Core"
+             xmlns:svc="clr-namespace:Xiaomuocr.Core.Services;assembly=Xiaomuocr.Core"
+             x:Class="Xiaomuocr.Views.Views.TaskCenterView"
+             x:Name="Root"
+             x:DataType="vm:TaskCenterViewModel">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24,20">
+        <StackPanel Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="任务中心" FontSize="20" FontWeight="Bold" Foreground="#2D3A2C" />
+                <Button Content="刷新" Command="{Binding RefreshCommand}"
+                        Background="#4A7C59" Foreground="White" Padding="10,4" CornerRadius="4" />
+                <Button Content="同步结果" Command="{Binding SyncResultsCommand}"
+                        Background="#2D5A3D" Foreground="White" Padding="10,4" CornerRadius="4" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="全部" Command="{Binding FilterCommand}" CommandParameter="{x:Null}"
+                        Background="#D4E5D9" Padding="10,4" CornerRadius="4" />
+                <Button Content="进行中" Command="{Binding FilterCommand}" CommandParameter="active"
+                        Background="#F2E6C8" Foreground="#9B722E" Padding="10,4" CornerRadius="4" />
+                <Button Content="已完成" Command="{Binding FilterCommand}" CommandParameter="completed"
+                        Background="#D4E5D9" Foreground="#2D5A3D" Padding="10,4" CornerRadius="4" />
+                <Button Content="已取消" Command="{Binding FilterCommand}" CommandParameter="cancelled"
+                        Background="#E8E4DC" Foreground="#5C5344" Padding="10,4" CornerRadius="4" />
+            </StackPanel>
+        </StackPanel>
+
+        <Border Grid.Row="1" Background="#F5E0DC" CornerRadius="6" Padding="8,6" Margin="0,6,0,0"
+                IsVisible="{Binding HasError}">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C" FontSize="12" />
+        </Border>
+
+        <Panel Grid.Row="2" Margin="0,8,0,0">
+            <Border IsVisible="{Binding IsEmpty}" Background="#FDFBF7" CornerRadius="10"
+                    Padding="40,30" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel HorizontalAlignment="Center" Spacing="8">
+                    <TextBlock Text="暂无识别任务" FontSize="16" Foreground="#5C5344"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="提交单页/批量/全文识别后，任务将显示在这里"
+                               FontSize="12" Foreground="#8B8370" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer IsVisible="{Binding !IsEmpty}">
+                <ItemsControl ItemsSource="{Binding FilteredTasks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="svc:RecognitionTaskItem">
+                            <Border Background="#FDFBF7" CornerRadius="8" Padding="12,10"
+                                    Margin="0,0,0,6" BorderBrush="#C5D4C0" BorderThickness="1">
+                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+                                    <TextBlock Grid.Row="0" Text="{Binding DocumentName}" FontSize="14"
+                                               FontWeight="SemiBold" Foreground="#2D3A2C"
+                                               TextWrapping="Wrap" MaxWidth="480" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PagesLabel}"
+                                               FontSize="12" Foreground="#5C5344"
+                                               VerticalAlignment="Center" Margin="12,0,0,0" />
+                                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
+                                               Text="{Binding ProgressText}" FontSize="12"
+                                               Foreground="#4A7C59" Margin="0,4,0,0" />
+                                    <TextBlock Grid.Row="2" Grid.ColumnSpan="2"
+                                               Text="{Binding TimeLineLabel}" FontSize="11"
+                                               Foreground="#8B8370" Margin="0,2,0,0" />
+                                    <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                                Spacing="8" Margin="0,8,0,0">
+                                        <Border Background="#D4E5D9" CornerRadius="4" Padding="6,2">
+                                            <TextBlock Text="{Binding Status}" FontSize="11"
+                                                       Foreground="#2D5A3D" />
+                                        </Border>
+                                        <Button Content="取消排队"
+                                                Command="{Binding #Root.((vm:TaskCenterViewModel)DataContext).CancelCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsVisible="{Binding CanCancel}"
+                                                Background="#B8443C" Foreground="White"
+                                                Padding="8,2" CornerRadius="4" FontSize="11" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Panel>
+
+        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" FontSize="11"
+                   Foreground="#8B8370" Margin="0,8,0,0" />
+    </Grid>
+</UserControl>

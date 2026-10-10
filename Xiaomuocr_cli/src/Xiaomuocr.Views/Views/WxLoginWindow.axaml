@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Xiaomuocr.Views.Views.WxLoginWindow"
+        Title="微信扫码登录"
+        Width="380" Height="480"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#EAE5D9">
+    <Border Padding="24,20">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+            <TextBlock Text="微信扫码登录"
+                       FontSize="20" FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       Foreground="#2D3A2C" />
+
+            <TextBlock Grid.Row="1"
+                       Margin="0,8,0,0"
+                       FontSize="12"
+                       Foreground="#5C5344"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="首次扫码将自动创建账户（无需绑定手机号）" />
+
+            <Border Grid.Row="2"
+                    Margin="0,16,0,0"
+                    Background="#FDFBF7"
+                    CornerRadius="8"
+                    Padding="12"
+                    HorizontalAlignment="Center">
+                <Image x:Name="QrCodeImage"
+                       Width="220" Height="220"
+                       Stretch="Uniform" />
+            </Border>
+
+            <TextBlock x:Name="StatusText"
+                       Grid.Row="3"
+                       Margin="0,12,0,0"
+                       FontSize="13"
+                       Foreground="#5C5344"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="请使用微信扫描二维码" />
+
+            <TextBlock x:Name="PollingText"
+                       Grid.Row="4"
+                       Margin="0,8,0,0"
+                       FontSize="12"
+                       Foreground="#4A7C59"
+                       HorizontalAlignment="Center"
+                       Text="正在等待扫码确认..." />
+
+            <Button x:Name="CloseBtn"
+                    Grid.Row="5"
+                    Content="取消"
+                    Width="100" Height="36"
+                    Margin="0,16,0,0"
+                    FontSize="13"
+                    Background="#8B8370" Foreground="White"
+                    CornerRadius="6"
+                    HorizontalAlignment="Center" />
+        </Grid>
+    </Border>
+</Window>
