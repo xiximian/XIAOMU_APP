@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.Views.Views.RegisterView">
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Border Background="#FDFBF7" CornerRadius="12" Padding="40,32"
+                 MaxWidth="400">
+            <StackPanel Spacing="14">
+                <TextBlock Text="创建账户" FontSize="24" FontWeight="Bold"
+                           Foreground="#2D3A2C" HorizontalAlignment="Center" />
+                <TextBlock Text="通过手机验证码注册新账户" FontSize="14"
+                           Foreground="#5C5344" HorizontalAlignment="Center" Margin="0,0,0,10" />
+
+                <!-- 手机号 -->
+                <TextBlock Text="手机号" FontSize="13" Foreground="#3D4A3E" />
+                <TextBox Text="{Binding Phone}" Watermark="请输入11位手机号"
+                         MaxLength="11" />
+
+                <!-- 验证码 + 发送按钮 -->
+                <TextBlock Text="验证码" FontSize="13" Foreground="#3D4A3E" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0" Text="{Binding VerifyCode}"
+                             Watermark="请输入验证码" MaxLength="6" />
+                    <Button Grid.Column="1" Content="{Binding SendCodeButtonText}"
+                            Command="{Binding SendCodeCommand}"
+                            Background="#4A7C59" Foreground="White"
+                            FontSize="12" Padding="12,6"
+                            CornerRadius="6" Margin="8,0,0,0"
+                            MinWidth="90" />
+                </Grid>
+
+                <!-- 密码 -->
+                <TextBlock Text="密码" FontSize="13" Foreground="#3D4A3E" />
+                <TextBox Text="{Binding Password}" PasswordChar="*"
+                         Watermark="密码 (至少6位)" />
+
+                <!-- 确认密码 -->
+                <TextBlock Text="确认密码" FontSize="13" Foreground="#3D4A3E" />
+                <TextBox Text="{Binding ConfirmPassword}" PasswordChar="*"
+                         Watermark="请再次输入密码" />
+
+                <!-- 状态消息 -->
+                <TextBlock Text="{Binding StatusMessage}" Foreground="#4A7C59"
+                           FontSize="12" IsVisible="{Binding HasStatus}"
+                           TextWrapping="Wrap" />
+
+                <!-- 错误消息 -->
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C"
+                           FontSize="12" IsVisible="{Binding HasError}"
+                           TextWrapping="Wrap" />
+
+                <!-- 注册按钮 -->
+                <Button Content="注 册" Command="{Binding RegisterCommand}"
+                        Background="#4A7C59" Foreground="White"
+                        FontSize="14" FontWeight="Bold" Padding="0,10"
+                        CornerRadius="8" HorizontalAlignment="Stretch" />
+
+                <!-- 返回登录 -->
+                <Button Content="← 返回登录" Command="{Binding BackToLoginCommand}"
+                        Background="Transparent" Foreground="#4A7C59"
+                        HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

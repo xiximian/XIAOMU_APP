@@ -1,0 +1,134 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Xiaomuocr.Views.Views.NoteDialog"
+        Title="笔记" Width="950" Height="650"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True">
+    <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+        <!-- ===== 工具栏 ===== -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+            <StackPanel Name="FormatToolbar" Orientation="Horizontal" Spacing="2">
+                <Button Name="BoldBtn" Content="B" Width="30" Padding="4,4"
+                        Focusable="False"
+                        FontWeight="Bold" FontSize="13" Background="#D4E5D9"
+                        CornerRadius="3" ToolTip.Tip="加粗选中文字" />
+                <Button Name="HighlightBtn" Content="高亮" Padding="8,4"
+                        Focusable="False"
+                        FontSize="12" Background="#F2E6C8" Foreground="#9B722E"
+                        CornerRadius="3" ToolTip.Tip="高亮选中文字" />
+                <Separator Width="8" />
+                <Button Name="H1Btn" Content="H1" Width="32" Padding="4,4"
+                        Focusable="False"
+                        FontSize="12" FontWeight="Bold" Background="#D4E5D9"
+                        Foreground="#2D5A3D" CornerRadius="3"
+                        ToolTip.Tip="设为一级标题" />
+                <Button Name="H2Btn" Content="H2" Width="32" Padding="4,4"
+                        Focusable="False"
+                        FontSize="12" FontWeight="Bold" Background="#D4E5D9"
+                        Foreground="#3D7A5A" CornerRadius="3"
+                        ToolTip.Tip="设为二级标题" />
+                <Button Name="H3Btn" Content="H3" Width="32" Padding="4,4"
+                        Focusable="False"
+                        FontSize="12" FontWeight="Bold" Background="#D4E5D9"
+                        Foreground="#4A7C59" CornerRadius="3"
+                        ToolTip.Tip="设为三级标题" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                <Button Name="ToggleModeBtn" Content="编辑"
+                        Padding="10,6" FontSize="12" Background="#4A7C59"
+                        Foreground="White" CornerRadius="4"
+                        ToolTip.Tip="切换编辑 / 阅读模式" />
+                <Button Name="SaveBtn" Content="保存笔记" Padding="10,6"
+                        FontSize="12" Background="#2D5A3D" Foreground="White"
+                        CornerRadius="4" ToolTip.Tip="保存笔记到文件" />
+                <Button Name="ExportBtn" Content="导出笔记" Padding="10,6"
+                        FontSize="12" Background="#4A7C59" Foreground="White"
+                        CornerRadius="4" ToolTip.Tip="导出为 HTML 文件" />
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== 主内容区：目录 + 编辑/阅读 ===== -->
+        <Grid Grid.Row="1" ColumnDefinitions="170,4,*">
+            <!-- 目录面板（始终可见） -->
+            <Border Grid.Column="0" Background="#EAE5D9"
+                    BorderBrush="#D5CFBF" BorderThickness="1"
+                    CornerRadius="4" Padding="6">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Text="目录" FontSize="12" FontWeight="Bold"
+                               Foreground="#4A5344" Margin="0,0,0,6" />
+                    <ListBox Grid.Row="1" Name="OutlineList"
+                             Background="Transparent" BorderThickness="0"
+                             FontSize="11">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Padding" Value="4,3" />
+                                <Setter Property="Background" Value="Transparent" />
+                            </Style>
+                            <Style Selector="ListBoxItem:pointerover">
+                                <Setter Property="Background" Value="#D4E5D9" />
+                            </Style>
+                            <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                                <Setter Property="Background" Value="#D4E5D9" />
+                            </Style>
+                        </ListBox.Styles>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="4" Background="#B8C5B0"
+                          HorizontalAlignment="Stretch" />
+
+            <!-- 编辑 / 阅读面板 -->
+            <Panel Grid.Column="2">
+                <!-- 编辑模式 -->
+                <Grid Name="EditPanel" ColumnDefinitions="*,4,*" IsVisible="False">
+                    <TextBox Grid.Column="0" Name="NoteEditor"
+                             FontFamily="Consolas,Microsoft YaHei"
+                             FontSize="13"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             BorderBrush="#B8C5B0" BorderThickness="1"
+                             Margin="0"
+                             Padding="8"
+                             VerticalAlignment="Stretch"
+                             HorizontalAlignment="Stretch" />
+                    <GridSplitter Grid.Column="1" Width="4" Background="#B8C5B0"
+                                  HorizontalAlignment="Stretch" />
+                    <Border Grid.Column="2" Background="#FDFBF7"
+                            BorderBrush="#B8C5B0" BorderThickness="1"
+                            CornerRadius="4" Padding="12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <TextBlock Name="EditPreviewBlock"
+                                       FontFamily="Microsoft YaHei"
+                                       FontSize="13"
+                                       TextWrapping="Wrap" />
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- 阅读模式 -->
+                <ScrollViewer Name="ReadPanel" VerticalScrollBarVisibility="Auto" IsVisible="True">
+                    <Border Background="#FDFBF7" Padding="24,16"
+                            BorderBrush="#D5CFBF" BorderThickness="1"
+                            CornerRadius="4">
+                        <TextBlock Name="ReadBlock"
+                                   FontFamily="Microsoft YaHei"
+                                   FontSize="14"
+                                   TextWrapping="Wrap" />
+                    </Border>
+                </ScrollViewer>
+            </Panel>
+        </Grid>
+
+        <!-- 底部状态栏 -->
+        <Border Grid.Row="2" Background="#D4E5D9" Padding="6,4" Margin="0,8,0,0"
+                CornerRadius="3">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <TextBlock Name="StatusLabel" FontSize="11" Foreground="#5C5344"
+                           Text="阅读模式  |  点击「编辑」开始编辑  |  Ctrl+S 保存" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

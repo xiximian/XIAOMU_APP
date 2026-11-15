@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.Views.Views.OcrView">
+    <ScrollViewer Padding="24,20">
+        <StackPanel Spacing="16" MaxWidth="650">
+
+            <!-- File selection -->
+            <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                    >
+                <StackPanel Spacing="8">
+                    <TextBlock Text="1. 选择图片" FontSize="16" FontWeight="Bold" Foreground="#2D3A2C" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBox Text="{Binding SelectedFilePath}" IsReadOnly="True"
+                                 Watermark="选择要识别的图片文件..."
+                                 MinWidth="300" />
+                        <Button Content="浏览..." Click="OnSelectFileClick"
+                                Background="#4A7C59" Foreground="White" Padding="16,8"
+                                CornerRadius="6" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding FileName}" FontSize="12" Foreground="#5C5344" />
+                    <TextBlock Text="支持: PNG / JPG / BMP / TIFF" FontSize="11" Foreground="#8B8370" />
+                </StackPanel>
+            </Border>
+
+            <!-- Parameters -->
+            <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                    >
+                <StackPanel Spacing="8">
+                    <TextBlock Text="2. 识别参数" FontSize="16" FontWeight="Bold" Foreground="#2D3A2C" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="页数:" VerticalAlignment="Center" />
+                        <NumericUpDown Value="{Binding PageCount}" Minimum="1" Maximum="1000"
+                                       Width="80" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Actions -->
+            <StackPanel Spacing="8">
+                <TextBlock Foreground="#5C5344" FontSize="13"
+                           Text="{Binding Cost, StringFormat='预计费用: ¥ {0:F2}'}" />
+                <Button Content="开始识别" Command="{Binding SubmitOcrCommand}"
+                        Background="#4A7C59" Foreground="White"
+                        FontSize="16" FontWeight="Bold" Padding="0,12"
+                        CornerRadius="8" HorizontalAlignment="Stretch"
+                        IsEnabled="{Binding !IsBusy}" />
+                <Button Content="取消任务" Command="{Binding CancelCommand}"
+                        Background="#B8443C" Foreground="White" Padding="0,8"
+                        CornerRadius="8" HorizontalAlignment="Stretch" />
+            </StackPanel>
+
+            <!-- Status -->
+            <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                    >
+                <StackPanel Spacing="8">
+                    <TextBlock Text="状态" FontSize="14" FontWeight="Bold" Foreground="#2D3A2C" />
+                    <TextBlock Text="{Binding StatusMessage}" Foreground="#3D4A3E" FontSize="13" />
+                    <ProgressBar IsIndeterminate="{Binding IsBusy}"
+                                 IsVisible="{Binding IsBusy}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Error -->
+            <Border Background="#F5E0DC" CornerRadius="8" Padding="12,10"
+                    IsVisible="{Binding HasError}">
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C" TextWrapping="Wrap" />
+            </Border>
+
+            <!-- Result -->
+            <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                    >
+                <StackPanel Spacing="10">
+                    <TextBlock Text="识别结果" FontSize="16" FontWeight="Bold" Foreground="#2D3A2C" />
+                    <TextBox Text="{Binding ResultText}" IsReadOnly="True"
+                             AcceptsReturn="True" MinHeight="200"
+                             TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="复制结果" Click="OnCopyResultClick"
+                                Background="#4A7C59" Foreground="White" Padding="12,6"
+                                CornerRadius="6" />
+                        <Button Content="保存为TXT" Click="OnSaveResultClick"
+                                Background="#5C5344" Foreground="White" Padding="12,6"
+                                CornerRadius="6" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

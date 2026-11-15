@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+    <ItemGroup>
+    <PackageReference Include="ReactiveUI" Version="20.2.45" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.7" />
+    <!-- 图片导入用 ImageSharp 压缩；PDF 由 JpegPdfWriter 直嵌 JPEG，勿用 PdfSharpCore（依赖 ImageSharp 2 API） -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="System.Management" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

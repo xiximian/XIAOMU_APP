@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:Xiaomuocr.Core.Models;assembly=Xiaomuocr.Core"
+             xmlns:vm="clr-namespace:Xiaomuocr.Core.ViewModels;assembly=Xiaomuocr.Core"
+             x:Class="Xiaomuocr.Views.Views.InvoiceView"
+             x:DataType="vm:InvoiceViewModel">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="24,20">
+        <DockPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="发票开具" FontSize="22" FontWeight="Bold"
+                       Foreground="#2D3A2C" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" Spacing="8"
+                        DockPanel.Dock="Right" HorizontalAlignment="Right">
+                <Button Content="新建发票" Command="{Binding CreateCommand}"
+                        Background="#4A7C59" Foreground="White"
+                        FontSize="13" Padding="14,7" CornerRadius="6" />
+                <Button Content="刷新" Command="{Binding RefreshCommand}"
+                        Background="#EAE5D9" Foreground="#5C5344"
+                        FontSize="12" Padding="12,6" CornerRadius="6" />
+            </StackPanel>
+        </DockPanel>
+
+        <StackPanel Grid.Row="1" Spacing="6" Margin="0,0,0,10">
+            <Border Background="#F5E0DC" CornerRadius="6" Padding="8,6"
+                    IsVisible="{Binding HasError}">
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#B8443C" FontSize="12"
+                           TextWrapping="Wrap" />
+            </Border>
+            <Border Background="#F2E6C8" CornerRadius="6" Padding="10,8"
+                    IsVisible="{Binding HasNotice}">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="注意事项" FontSize="12" FontWeight="SemiBold"
+                               Foreground="#9B722E" />
+                    <TextBlock Text="{Binding Notice}" FontSize="12" Foreground="#5C5344"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#8B8370"
+                       IsVisible="{Binding HasStatus}" />
+        </StackPanel>
+
+        <Border Grid.Row="2" Background="#FDFBF7" CornerRadius="10" Padding="12">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="我的开票申请" FontSize="15"
+                           FontWeight="Bold" Foreground="#2D3A2C" Margin="0,0,0,10" />
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:InvoiceListItem">
+                                <Border Background="#EAE5D9" CornerRadius="8"
+                                        Padding="12,10" Margin="0,0,0,8"
+                                        Cursor="Hand" PointerPressed="OnItemPointerPressed"
+                                        Tag="{Binding}">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel Spacing="4">
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <TextBlock Text="{Binding StatusLabel}"
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="#2D5A3D" />
+                                                <TextBlock Text="{Binding CreatedAt}"
+                                                           FontSize="11" Foreground="#8B8370" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding SummaryLine}"
+                                                       FontSize="14" Foreground="#2D3A2C"
+                                                       TextWrapping="Wrap" />
+                                            <Border IsVisible="{Binding HasLatestReceipt}"
+                                                    Background="#E8F0E9" CornerRadius="5"
+                                                    Padding="8,5" Margin="0,2,0,0">
+                                                <TextBlock Text="{Binding ReceiptPreview}"
+                                                           FontSize="12" Foreground="#2D5A3D"
+                                                           TextWrapping="Wrap" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="查看 ›"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="#4A7C59" FontSize="12"
+                                                   Margin="12,0,0,0" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

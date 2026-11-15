@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Windows 用 WinExe（无控制台）；macOS/Linux 必须用 Exe -->
+    <OutputType Condition="$([MSBuild]::IsOSPlatform('windows'))">WinExe</OutputType>
+    <OutputType Condition="!$([MSBuild]::IsOSPlatform('windows'))">Exe</OutputType>
+    <!-- 交叉编译时以目标 RID 为准，避免宿主 OS 误判 -->
+    <OutputType Condition="'$(RuntimeIdentifier)' != '' AND ($(RuntimeIdentifier.StartsWith('osx')) Or $(RuntimeIdentifier.StartsWith('linux')))">Exe</OutputType>
+    <OutputType Condition="'$(RuntimeIdentifier)' != '' AND $(RuntimeIdentifier.StartsWith('win'))">WinExe</OutputType>
+
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- 勿写死 x64：否则 osx-arm64 / win-arm64 发布会错架构 -->
+    <PlatformTarget Condition="'$(RuntimeIdentifier)' == '' AND $([MSBuild]::IsOSPlatform('windows'))">x64</PlatformTarget>
+    <ApplicationIcon Condition="'$(RuntimeIdentifier)' == '' AND $([MSBuild]::IsOSPlatform('windows'))">..\..\icon\xiaomuicon.ico</ApplicationIcon>
+    <ApplicationIcon Condition="'$(RuntimeIdentifier)' != '' AND $(RuntimeIdentifier.StartsWith('win'))">..\..\icon\xiaomuicon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.8" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.8" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.8" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.8" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.8" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.7" />
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xiaomuocr.Core\Xiaomuocr.Core.csproj" />
+    <ProjectReference Include="..\Xiaomuocr.Views\Xiaomuocr.Views.csproj" />
+    <!-- 构建 PdfHost，但不把其程序集引用进主程序（避免加载 pdfium） -->
+    <ProjectReference Include="..\Xiaomuocr.PdfHost\Xiaomuocr.PdfHost.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- 把 PdfHost 整份输出复制到 App 目录旁，供进程调用 -->
+  <!-- 兼容 Build / Publish，以及 win-x64 / osx-arm64 / osx-x64 等 RID 子目录 -->
+  <Target Name="CopyPdfHost" AfterTargets="Build;Publish">
+    <PropertyGroup>
+      <_PdfHostBase>$(MSBuildThisFileDirectory)..\Xiaomuocr.PdfHost\bin\$(Configuration)\net9.0\</_PdfHostBase>
+      <_Rid>$(RuntimeIdentifier)</_Rid>
+      <_PdfHostOut Condition="'$(_Rid)' != '' AND Exists('$(_PdfHostBase)$(_Rid)\Xiaomuocr.PdfHost.exe')">$(_PdfHostBase)$(_Rid)\</_PdfHostOut>
+      <_PdfHostOut Condition="'$(_PdfHostOut)' == '' AND '$(_Rid)' != '' AND Exists('$(_PdfHostBase)$(_Rid)\Xiaomuocr.PdfHost')">$(_PdfHostBase)$(_Rid)\</_PdfHostOut>
+      <_PdfHostOut Condition="'$(_PdfHostOut)' == '' AND Exists('$(_PdfHostBase)Xiaomuocr.PdfHost.exe')">$(_PdfHostBase)</_PdfHostOut>
+      <_PdfHostOut Condition="'$(_PdfHostOut)' == '' AND Exists('$(_PdfHostBase)Xiaomuocr.PdfHost')">$(_PdfHostBase)</_PdfHostOut>
+      <_CopyDest>$(OutputPath)</_CopyDest>
+      <_CopyDest Condition="'$(PublishDir)' != ''">$(PublishDir)</_CopyDest>
+      <_HasPdfHost Condition="'$(_PdfHostOut)' != '' AND (Exists('$(_PdfHostOut)Xiaomuocr.PdfHost.exe') OR Exists('$(_PdfHostOut)Xiaomuocr.PdfHost'))">true</_HasPdfHost>
+    </PropertyGroup>
+    <ItemGroup>
+      <_PdfHostFiles Include="$(_PdfHostOut)**\*.*" Condition="'$(_HasPdfHost)' == 'true'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_PdfHostFiles)" DestinationFolder="$(_CopyDest)%(RecursiveDir)" SkipUnchangedFiles="true" Condition="'$(_HasPdfHost)' == 'true'" />
+    <Warning Text="未找到 PdfHost 输出，跳过 CopyPdfHost（PDF 预览将不可用）" Condition="'$(_HasPdfHost)' != 'true'" />
+  </Target>
+
+</Project>
