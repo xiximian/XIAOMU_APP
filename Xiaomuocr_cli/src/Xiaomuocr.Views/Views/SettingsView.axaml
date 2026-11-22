@@ -1,0 +1,150 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xiaomuocr.Views.Views.SettingsView">
+    <Grid>
+        <ScrollViewer Padding="24,20">
+            <StackPanel Spacing="16" MaxWidth="640">
+
+                <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16"
+                        IsVisible="{Binding IsServerUnlocked}">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="服务器设置" FontSize="18" FontWeight="Bold" Foreground="#2D3A2C" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="服务器地址" FontSize="13" Foreground="#3D4A3E" />
+                            <TextBox Text="{Binding ServerAddress}" Watermark="请输入服务器地址，如 http://117.72.35.21" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="当前连接" FontSize="11" Foreground="#8B8370" />
+                            <TextBlock Text="{Binding CurrentServerUrl}" FontSize="12" Foreground="#4A7C59" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button Content="测试连接" Command="{Binding TestConnectionCommand}"
+                                    Background="#4A7C59" Foreground="White" Padding="14,6"
+                                    CornerRadius="6" IsEnabled="{Binding !IsBusy}" />
+                            <Button Content="保存设置" Command="{Binding SaveCommand}"
+                                    Background="#4A7C59" Foreground="White" Padding="14,6"
+                                    CornerRadius="6" IsEnabled="{Binding !IsBusy}" />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding StatusMessage}" FontSize="12"
+                                   Foreground="#3D4A3E" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 关于：始终展示（版本 / 检查更新）；连点标题可解锁服务器设置 -->
+                <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16">
+                    <StackPanel Spacing="12">
+                        <Button Command="{Binding UnlockServerTapCommand}"
+                                Background="Transparent" BorderThickness="0" Padding="0"
+                                HorizontalAlignment="Left" Cursor="Hand">
+                            <TextBlock Text="关于" FontSize="18" FontWeight="Bold" Foreground="#2D3A2C" />
+                        </Button>
+                        <TextBlock Text="{Binding VersionInfo}" FontSize="13" Foreground="#5C5344" />
+                        <TextBlock Text="{Binding AppDirectory}" FontSize="11" Foreground="#8B8370" TextWrapping="Wrap" />
+                        <Button Content="检查更新" Command="{Binding CheckUpdateCommand}"
+                                Background="#D4E5D9" Foreground="#3D4A3E" Padding="14,6"
+                                CornerRadius="6" HorizontalAlignment="Left"
+                                IsEnabled="{Binding !IsBusy}" />
+                        <TextBlock Text="{Binding StatusMessage}" FontSize="12"
+                                   Foreground="#3D4A3E" TextWrapping="Wrap"
+                                   IsVisible="{Binding !IsServerUnlocked}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 识别参数：暂时隐藏。普通 OCR 经模力方舟时无法透传 Paddle 参数，开放会误导用户。 -->
+                <Border Background="#FDFBF7" CornerRadius="10" Padding="20,16" IsVisible="False">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="识别参数" FontSize="18" FontWeight="Bold" Foreground="#2D3A2C" />
+                        <TextBlock Text="{Binding OcrPresetLabel}" FontSize="13" Foreground="#5C5344" />
+                        <TextBlock Text="一键推荐会填充下列参数；手动修改后变为「自定义」。保存后对单页/全文/范围识别生效。"
+                                   FontSize="12" Foreground="#8B8370" TextWrapping="Wrap" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="默认" Command="{Binding ApplyDefaultPresetCommand}"
+                                    Background="#D4E5D9" Foreground="#3D4A3E" Padding="12,6" CornerRadius="6" />
+                            <Button Content="一般" Command="{Binding ApplyGeneralPresetCommand}"
+                                    Background="#D4E5D9" Foreground="#2D5A3D" Padding="12,6" CornerRadius="6" />
+                            <Button Content="拓片" Command="{Binding ApplyRubbingPresetCommand}"
+                                    Background="#F2E6C8" Foreground="#9B722E" Padding="12,6" CornerRadius="6" />
+                            <Button Content="保存识别参数" Command="{Binding SaveCommand}"
+                                    Background="#4A7C59" Foreground="White" Padding="12,6" CornerRadius="6"
+                                    IsEnabled="{Binding !IsBusy}" />
+                        </StackPanel>
+
+                        <TextBlock Text="开关" FontSize="14" FontWeight="SemiBold" Foreground="#3D4A3E" Margin="0,4,0,0" />
+                        <WrapPanel ItemWidth="200">
+                            <CheckBox Content="方向分类（固定关）" IsChecked="{Binding UseDocOrientationClassify}"
+                                      IsEnabled="False" Margin="0,0,0,6" ToolTip.Tip="当前链路不支持方向分类；开启会导致识别框与页面错位" />
+                            <CheckBox Content="文档展平" IsChecked="{Binding UseDocUnwarping}" Margin="0,0,0,6" />
+                            <CheckBox Content="版面检测" IsChecked="{Binding UseLayoutDetection}" Margin="0,0,0,6" />
+                            <CheckBox Content="图表识别" IsChecked="{Binding UseChartRecognition}" Margin="0,0,0,6" />
+                            <CheckBox Content="印章识别" IsChecked="{Binding UseSealRecognition}" Margin="0,0,0,6" />
+                            <CheckBox Content="图块 OCR" IsChecked="{Binding UseOcrForImageBlock}" Margin="0,0,0,6" />
+                            <CheckBox Content="合并表格" IsChecked="{Binding MergeTables}" Margin="0,0,0,6" />
+                            <CheckBox Content="标题重分级" IsChecked="{Binding RelevelTitles}" Margin="0,0,0,6" />
+                            <CheckBox Content="Layout NMS" IsChecked="{Binding LayoutNms}" Margin="0,0,0,6" />
+                            <CheckBox Content="页面重构" IsChecked="{Binding RestructurePages}" Margin="0,0,0,6" />
+                        </WrapPanel>
+
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4,0,0">
+                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8" Spacing="4">
+                                <TextBlock Text="layoutShapeMode" FontSize="12" Foreground="#5C5344" />
+                                <TextBox Text="{Binding LayoutShapeMode}" Watermark="auto" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,8" Spacing="4">
+                                <TextBlock Text="promptLabel" FontSize="12" Foreground="#5C5344" />
+                                <TextBox Text="{Binding PromptLabel}" Watermark="ocr / spotting" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8" Spacing="4">
+                                <TextBlock Text="repetitionPenalty" FontSize="12" Foreground="#5C5344" />
+                                <TextBox Text="{Binding RepetitionPenalty}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,8" Spacing="4">
+                                <TextBlock Text="temperature" FontSize="12" Foreground="#5C5344" />
+                                <TextBox Text="{Binding Temperature}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,8" Spacing="4">
+                                <TextBlock Text="topP" FontSize="12" Foreground="#5C5344" />
+                                <TextBox Text="{Binding TopP}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="1" Margin="8,0,0,8" Spacing="4">
+                                <TextBlock Text="minPixels" FontSize="12" Foreground="#5C5344" />
+                                <TextBox Text="{Binding MinPixels}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,8,0" Spacing="4">
+                                <TextBlock Text="maxPixels" FontSize="12" Foreground="#5C5344" />
+                                <TextBox Text="{Binding MaxPixels}" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 页内解锁面板 -->
+        <Border Background="#99000000" IsVisible="{Binding ShowUnlockPrompt}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Border Background="#FDFBF7" CornerRadius="10" Padding="24,20"
+                    MaxWidth="360" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="解锁服务器设置" FontSize="16" FontWeight="Bold" Foreground="#2D3A2C" />
+                    <TextBlock Text="提示：131" FontSize="12" Foreground="#8B8370" />
+                    <TextBox Text="{Binding UnlockPassword}" PasswordChar="*"
+                             Watermark="请输入密码" />
+                    <TextBlock Text="{Binding UnlockError}" Foreground="#B8443C" FontSize="12"
+                               IsVisible="{Binding HasUnlockError}" />
+                    <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                        <Button Content="取消" Command="{Binding CancelUnlockCommand}"
+                                Background="#EAE5D9" Foreground="#5C5344" Padding="14,6" CornerRadius="6" />
+                        <Button Content="确定" Command="{Binding ConfirmUnlockCommand}"
+                                Background="#4A7C59" Foreground="White" Padding="14,6" CornerRadius="6" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- 勿写死 x64，否则 osx-arm64 发布错架构 -->
+    <PlatformTarget Condition="'$(RuntimeIdentifier)' == '' AND $([MSBuild]::IsOSPlatform('windows'))">x64</PlatformTarget>
+    <AssemblyName>Xiaomuocr.PdfHost</AssemblyName>
+    <!-- Docnet 原生库：跟随发布 RID；本地无 RID 调试默认 win-x64 -->
+    <DocnetRuntime Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</DocnetRuntime>
+    <DocnetRuntime Condition="'$(DocnetRuntime)' == ''">win-x64</DocnetRuntime>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Docnet.Core" Version="2.6.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
+  </ItemGroup>
+</Project>

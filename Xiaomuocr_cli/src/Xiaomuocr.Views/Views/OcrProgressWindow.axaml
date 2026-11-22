@@ -1,0 +1,74 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Xiaomuocr.Views.Views.OcrProgressWindow"
+        Title="批量识别"
+        Width="480" Height="280"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#EAE5D9">
+    <Border Padding="24,20">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+            <TextBlock x:Name="TitleText"
+                       Text="批量识别"
+                       FontSize="18" FontWeight="Bold"
+                       Foreground="#2D3A2C" />
+
+            <TextBlock x:Name="DocumentText"
+                       Grid.Row="1"
+                       Margin="0,8,0,0"
+                       FontSize="13"
+                       Foreground="#5C5344"
+                       TextWrapping="Wrap"
+                       Text="—" />
+
+            <TextBlock x:Name="PageCountText"
+                       Grid.Row="2"
+                       Margin="0,16,0,6"
+                       FontSize="13"
+                       Foreground="#3D4A3E"
+                       Text="准备中…" />
+
+            <ProgressBar x:Name="ProgressBar"
+                         Grid.Row="3"
+                         Height="10"
+                         Minimum="0"
+                         Maximum="1"
+                         Value="0"
+                         Foreground="#9B722E"
+                         Background="#D5CFBF" />
+
+            <TextBlock x:Name="StatusText"
+                       Grid.Row="4"
+                       Margin="0,12,0,0"
+                       FontSize="13"
+                       Foreground="#4A5344"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Top"
+                       Text="等待开始…" />
+
+            <StackPanel Grid.Row="5"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="10"
+                        Margin="0,16,0,0">
+                <Button x:Name="CancelButton"
+                        Content="取消识别"
+                        MinWidth="96" MinHeight="36"
+                        Padding="16,8"
+                        CornerRadius="6"
+                        Background="#F5E0DC"
+                        Foreground="#B8443C"
+                        Click="OnCancelClick" />
+                <Button x:Name="CloseButton"
+                        Content="关闭"
+                        MinWidth="96" MinHeight="36"
+                        Padding="16,8"
+                        CornerRadius="6"
+                        Background="#D4E5D9"
+                        Foreground="#3D4A3E"
+                        IsEnabled="False"
+                        Click="OnCloseClick" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
